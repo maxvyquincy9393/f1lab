@@ -1,3 +1,15 @@
+---
+title: F1 2025 Analytics Dashboard
+emoji: 🏎️
+colorFrom: red
+colorTo: gray
+sdk: streamlit
+sdk_version: 1.41.0
+app_file: src/app.py
+pinned: false
+license: mit
+---
+
 # F1 2025 Season Visualization
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
