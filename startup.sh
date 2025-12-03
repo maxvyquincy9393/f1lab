@@ -1,2 +1,2 @@
 #!/bin/bash
-streamlit run src/app.py --server.port 8000 --server.address 0.0.0.0
+gunicorn --bind 0.0.0.0:8000 src.dash_app:server
