@@ -38,14 +38,14 @@ from fastf1_extended import (
     export_session_to_csv, get_circuit_layout_info,
     get_race_control_messages, get_detailed_pit_analysis
 )
-from model import load_trained_model
+from model import load_trained_model, RaceStrategySimulator
 from features import prepare_features
 from fastf1_plotting import (
     plot_circuit_with_corners, plot_team_pace_comparison, 
     plot_tyre_strategy_summary, plot_gear_shift_on_track,
     plot_speed_on_track
 )
-from advanced_viz import plot_telemetry_comparison, plot_track_3d, plot_gear_shift_trace
+from advanced_viz import plot_telemetry_comparison, plot_track_3d, plot_gear_shift_trace, plot_corner_performance, plot_tyre_shape, plot_circuit_context
 from qualifying_viz import plot_qualifying_evolution, plot_qualifying_gap, plot_sector_dominance
 from home import render_home_tab
 import matplotlib.pyplot as plt
@@ -201,7 +201,7 @@ def setup_fastf1_cache():
     return cache_dir
 
 
-def show_plotly_chart(fig, use_container_width=True):
+def show_plotly_chart(fig, use_container_width=True, **kwargs):
     """Display Plotly chart with hidden toolbar and logo."""
     config = {
         'displayModeBar': False,  # Hide the entire toolbar
@@ -210,7 +210,7 @@ def show_plotly_chart(fig, use_container_width=True):
                                    'autoScale2d', 'resetScale2d', 'toImage'],
         'staticPlot': False       # Keep it interactive
     }
-    st.plotly_chart(fig, use_container_width=use_container_width, config=config)
+    st.plotly_chart(fig, use_container_width=use_container_width, config=config, **kwargs)
 
 
 @st.cache_data(ttl=3600)
@@ -2084,9 +2084,70 @@ def render_race_analysis_tab(df):
                                 show_plotly_chart(fig, use_container_width=True)
                                 st.caption(f"Animation: {len(interpolated_data)} drivers, {num_points} frames. Click Play to start.")
             
-            # Show static track preview
+            # Show Track Dominance Map
             st.markdown("---")
-            st.markdown("**Track Layout**")
+            st.subheader("🗺️ Circuit Dominance Map")
+            st.markdown("Color-coded track map showing which team/driver is fastest in each mini-sector.")
+            
+            if st.button("Generate Dominance Map", type="primary", key="dom_btn"):
+                with st.spinner("Calculating mini-sector dominance..."):
+                    try:
+                        laps = session.laps
+                        if laps is not None and not laps.empty:
+                            # 1. Get telemetry for all fastest laps per driver
+                            drivers = laps['Driver'].unique()
+                            telemetry_data = []
+                            
+                            for d in drivers:
+                                dl = laps.pick_driver(d).pick_fastest()
+                                if dl is not None:
+                                    t = dl.get_telemetry()
+                                    if t is not None:
+                                        t['Driver'] = d
+                                        t['Team'] = dl['Team']
+                                        telemetry_data.append(t)
+                            
+                            if telemetry_data:
+                                # 2. Merge all telemetry
+                                all_tel = pd.concat(telemetry_data)
+                                
+                                # 3. Create mini-sectors relative to distance
+                                all_tel['DistanceInt'] = (all_tel['Distance'] // 50).astype(int) # 50m chunks
+                                
+                                # 4. Find fastest driver per chunk (Highest Speed)
+                                # Simplified: Using Speed as proxy for 'fastest through sector'
+                                sector_dominance = all_tel.loc[all_tel.groupby('DistanceInt')['Speed'].idxmax()]
+                                
+                                # 5. Plot
+                                fig_dom = go.Figure()
+                                for team in sector_dominance['Team'].unique():
+                                    team_segments = sector_dominance[sector_dominance['Team'] == team]
+                                    color = TEAM_COLORS.get(team, '#888')
+                                    
+                                    fig_dom.add_trace(go.Scatter(
+                                        x=team_segments['X'], y=team_segments['Y'],
+                                        mode='markers',
+                                        marker=dict(size=4, color=color),
+                                        name=team
+                                    ))
+                                
+                                fig_dom.update_layout(
+                                    height=500,
+                                    paper_bgcolor='#0e1117',
+                                    plot_bgcolor='#0e1117',
+                                    xaxis=dict(visible=False, scaleanchor='y'),
+                                    yaxis=dict(visible=False),
+                                    title="Top Speed Dominance by Team",
+                                    font=dict(color='white')
+                                )
+                                show_plotly_chart(fig_dom, use_container_width=True)
+                            else:
+                                st.warning("Not enough telemetry data")
+                    except Exception as ex:
+                        st.error(f"Dominance Map Error: {ex}")
+            
+            # Static Preview (Fallback)
+
             try:
                 laps = session.laps
                 if laps is not None and not laps.empty:
@@ -2115,6 +2176,19 @@ def render_race_analysis_tab(df):
                                 show_plotly_chart(fig_preview, use_container_width=True)
             except:
                 pass
+
+            # NEW: Corner Analysis Matrix
+            st.divider()
+            st.subheader("👑 Corner Mastery Matrix")
+            st.markdown("Average speed in **Low (<120)**, **Medium (120-230)**, and **High (>230)** speed zones.")
+            
+            if st.button("Generate Performance Matrix", key="corn_btn"):
+                with st.spinner("Analyzing corner speeds..."):
+                    fig_corn = plot_corner_performance(session)
+                    if fig_corn:
+                        show_plotly_chart(fig_corn, use_container_width=True)
+                    else:
+                        st.info("Could not generate matrix")
                 
         except Exception as e:
             st.error(f"Error: {e}")
@@ -2126,12 +2200,18 @@ def render_race_analysis_tab(df):
             laps = session.laps
             if laps is not None and not laps.empty:
                 pos_data = []
-                for lap_num in sorted(laps['LapNumber'].unique()):
-                    lap = laps[laps['LapNumber'] == lap_num]
-                    for _, row in lap.iterrows():
-                        if 'Position' in row and pd.notna(row['Position']):
-                            pos_data.append({'Lap': int(lap_num), 'Driver': row['Driver'], 
-                                'Position': int(row['Position']), 'Team': row.get('Team', '')})
+                # Fix: Ensure correct types
+                laps = laps.copy()
+                laps['Position'] = pd.to_numeric(laps['Position'], errors='coerce')
+                
+                # Check column existence
+                if 'Position' in laps.columns:
+                    for lap_num in sorted(laps['LapNumber'].unique()):
+                        lap = laps[laps['LapNumber'] == lap_num]
+                        for _, row in lap.iterrows():
+                            if pd.notna(row['Position']):
+                                pos_data.append({'Lap': int(lap_num), 'Driver': row['Driver'], 
+                                    'Position': int(row['Position']), 'Team': row.get('Team', '')})
                 
                 if pos_data:
                     pos_df = pd.DataFrame(pos_data)
@@ -2184,6 +2264,11 @@ def render_race_analysis_tab(df):
                 with c2:
                     battle_b = st.selectbox("Driver B", [d for d in drivers_list if d != battle_a], key="battle_b")
                 
+                # Context Map
+                with st.expander("📍 Circuit Context", expanded=False):
+                    ctx_fig = plot_circuit_context(session)
+                    if ctx_fig: show_plotly_chart(ctx_fig, use_container_width=False)
+
                 if st.button("Analyze Battle", type="primary", key="battle_btn"):
                     laps_a = laps[(laps['Driver'] == battle_a) & (laps['LapTime'].notna())].sort_values('LapNumber')
                     laps_b = laps[(laps['Driver'] == battle_b) & (laps['LapTime'].notna())].sort_values('LapNumber')
@@ -2231,6 +2316,22 @@ def render_race_analysis_tab(df):
     with analysis_tabs[7]:
         st.subheader("Strategy Analysis")
         try:
+            # 1. Tyre Visuals (New)
+            st.markdown("### 🍩 Tyre Stint Analysis")
+            s_laps = session.laps
+            driver_sel = st.selectbox("Select Driver for Stint View", sorted(s_laps['Driver'].unique()), key="stint_viz_drv")
+            
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                # Plot Donut for Current Stint / All Stints ?
+                # Let's plot the Start Tyres
+                t_fig = plot_tyre_shape(session, driver_sel)
+                if t_fig: show_plotly_chart(t_fig, use_container_width=True)
+            
+            with c2:
+                # Existing Pit Detail
+                pass 
+
             pit_stops = get_pit_stops(session)
             if pit_stops is not None and not pit_stops.empty:
                 c1, c2, c3, c4 = st.columns(4)
@@ -2252,11 +2353,48 @@ def render_race_analysis_tab(df):
                 fig2.add_trace(go.Bar(x=pit_laps['Lap'], y=pit_laps['Stops'], marker_color='#E10600'))
                 fig2.update_layout(title="Pit Windows", xaxis_title="Lap", yaxis_title="Stops",
                     height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                show_plotly_chart(fig2, use_container_width=True)
             else:
                 st.info("No pit stop data")
         except Exception as e:
             st.error(f"Error: {e}")
+
+        # --- GOD MODE SIMULATION INTEGRATION ---
+        st.divider()
+        st.markdown("### ⚡ Dynamic Strategy Simulation")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            base_lap = st.number_input("Base Lap Time (s)", 80.0, 120.0, 90.0, step=0.1, key="strat_base")
+            total_laps_sim = st.number_input("Total Laps", 10, 80, 52, key="strat_tot")
+        
+        sim = RaceStrategySimulator(base_lap, total_laps_sim)
+        
+        sc1, sc2, sc3 = st.columns(3)
+        with sc1: driver_sim = st.text_input("Driver", "Verstappen", key="strat_drv")
+        with sc2: start_tire = st.selectbox("Start Compound", ["SOFT", "MEDIUM", "HARD"], key="strat_tire")
+        with sc3: current_lap_sim = st.slider("Current Lap", 0, int(total_laps_sim), 0, key="strat_lap")
+        
+        if st.button("Run Strategy Simulation", type="primary"):
+            strategy = sim.predict_strategy(driver_sim, start_tire, current_lap_sim)
+            st.success(f"Recommended: **{strategy['recommended']}**")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("1-Stop", f"{strategy['1_stop_time']:.1f}s")
+            m2.metric("2-Stop", f"{strategy['2_stop_time']:.1f}s")
+            m3.metric("Delta", f"{strategy['delta']:.1f}s")
+            
+            # Catch up Logic
+            st.subheader("Catch-Up Prediction")
+            cc1, cc2 = st.columns(2)
+            with cc1: gap = st.number_input("Gap (s)", 0.0, 60.0, 5.0, key="strat_gap")
+            with cc2: 
+                chaser_tyre = st.selectbox("Chaser", ["SOFT", "MEDIUM"], key="strat_chaser")
+                leader_tyre = st.selectbox("Leader", ["MEDIUM", "HARD"], index=1, key="strat_leader")
+            
+            laps_catch = sim.catch_up_prediction(gap, chaser_tyre, leader_tyre, total_laps_sim - current_lap_sim)
+            if laps_catch != -1:
+                st.info(f"🚀 Overtake in **{laps_catch} laps**")
+            else:
+                st.warning("⚠️ Overtake unlikely")
     
     # TAB 9: DRIVER SCORES
     with analysis_tabs[8]:
@@ -2285,18 +2423,51 @@ def render_race_analysis_tab(df):
                     scores_df = pd.DataFrame(scores).sort_values('Overall', ascending=False)
                     scores_df['Rank'] = range(1, len(scores_df)+1)
                     
-                    # Podium
-                    podium = st.columns(3)
-                    medals = ['P1', 'P2', 'P3']
-                    for i, (_, row) in enumerate(scores_df.head(3).iterrows()):
-                        tc = TEAM_COLORS.get(row['Team'], '#666')
-                        with podium[i]:
-                            st.markdown(f"""<div style="text-align:center;padding:15px;background:linear-gradient(135deg,{tc}55 0%,{tc}22 100%);border-radius:10px;border:2px solid {tc};">
-                                <h2 style="margin:0;">{medals[i]}</h2><h4 style="color:white;margin:5px 0;">{row['Driver']}</h4>
-                                <p style="color:{tc};margin:0;font-weight:bold;">{row['Overall']:.1f}</p></div>""", unsafe_allow_html=True)
+                    st.divider()
                     
-                    st.dataframe(scores_df[['Rank','Driver','Team','Pace','Consistency','Race Pace','Overall','Best']], 
-                        use_container_width=True, hide_index=True)
+                    # --- NEW: RADAR CHART ---
+                    st.markdown("### 🕸️ Driver Capability Radar")
+                    col_radar, col_table = st.columns([1, 1])
+                    
+                    with col_radar:
+                        radar_drivers = st.multiselect("Compare Drivers", scores_df['Driver'].unique(), 
+                                                     default=scores_df['Driver'].head(3).tolist() if len(scores_df)>=3 else scores_df['Driver'].tolist())
+                        
+                        if radar_drivers:
+                            fig_radar = go.Figure()
+                            for d in radar_drivers:
+                                d_row = scores_df[scores_df['Driver'] == d].iloc[0]
+                                d_team = d_row['Team']
+                                d_color = TEAM_COLORS.get(d_team, '#888')
+                                
+                                fig_radar.add_trace(go.Scatterpolar(
+                                    r=[d_row['Pace'], d_row['Consistency'], d_row['Race Pace'], d_row['Overall']],
+                                    theta=['Quali Pace', 'Consistency', 'Race Pace', 'Overall Rating'],
+                                    fill='toself',
+                                    name=d,
+                                    line_color=d_color
+                                ))
+                            
+                            fig_radar.update_layout(
+                                polar=dict(
+                                    radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#444'),
+                                    bgcolor='rgba(0,0,0,0)'
+                                ),
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                plot_bgcolor='rgba(0,0,0,0)',
+                                font=dict(color='white'),
+                                margin=dict(l=40, r=40, t=20, b=20),
+                                showlegend=True,
+                                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                            )
+                            show_plotly_chart(fig_radar, use_container_width=True)
+                    
+                    with col_table:
+                        st.markdown("### Leaderboard")
+                        st.dataframe(
+                            scores_df[['Rank','Driver','Team','Overall']].style.background_gradient(subset=['Overall'], cmap='plasma'), 
+                            use_container_width=True, hide_index=True
+                        )
                     
                     # Radar chart
                     fig = go.Figure()
@@ -3274,7 +3445,8 @@ def main():
     # 4. Analysis
     with main_tabs[3]:
         st.subheader("Advanced Analysis")
-        analysis_subtabs = st.tabs(["Teammate Battle", "AI Predictions"])
+        # removed God Mode separate tab link, moved content to Strategy Tools
+        analysis_subtabs = st.tabs(["Teammate Battle", "Race Predictions"])
         
         with analysis_subtabs[0]:
             render_teammate_battle_tab(df)

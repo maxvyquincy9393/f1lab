@@ -52,11 +52,11 @@ def plot_telemetry_comparison(session, driver1, driver2, lap_number=None):
         
         # Create subplots
         fig = make_subplots(
-            rows=5, cols=1,
+            rows=6, cols=1,
             shared_xaxes=True,
-            vertical_spacing=0.03,
-            subplot_titles=("Speed", "Throttle", "Brake", "Gear", "RPM"),
-            row_heights=[0.3, 0.15, 0.15, 0.15, 0.25]
+            vertical_spacing=0.02,
+            subplot_titles=("Speed", "Throttle", "Brake", "Gear", "RPM", "Time Delta"),
+            row_heights=[0.25, 0.1, 0.1, 0.1, 0.2, 0.25]
         )
         
         # 1. Speed
@@ -117,13 +117,45 @@ def plot_telemetry_comparison(session, driver1, driver2, lap_number=None):
             name=driver2, line=dict(color=color2), showlegend=False, legendgroup=driver2
         ), row=5, col=1)
 
-        # Delta time calculation (Approximation)
-        # This is complex because distances don't match perfectly. 
-        # We skip delta time for this iteration to keep it robust.
+        # Delta time calculation
+        try:
+            # Interpolate to find time diff
+            # Need cumulative time
+            t1 = tel1['Time'].dt.total_seconds()
+            t2 = tel2['Time'].dt.total_seconds()
+            d1 = tel1['Distance']
+            d2 = tel2['Distance']
+            
+            # Interpolate t2 onto d1 axis
+            # Note: Distances must be sorted, usually they are
+            t2_interp = np.interp(d1, d2, t2)
+            delta = t2_interp - t1 # Positive means driver1 is faster (smaller time)?
+            # Let's say Delta = Driver 2 Time - Driver 1 Time
+            # If Delta > 0, Driver 2 took longer -> Driver 1 is ahead.
+            # Usually: Delta = Reference - Target.
+            # Let's plot: Gap to Driver 1.
+            # Gap = t2 - t1. 
+            # If t2 > t1 (D2 is slower), Gap is +ve.
+            gap = t2_interp - t1
+            
+            fig.add_trace(go.Scatter(
+                x=d1, y=gap,
+                name=f"Gap to {driver1}",
+                line=dict(color='white', width=1),
+                fill='tozeroy',
+                fillcolor='rgba(255,255,255,0.1)',
+                legendgroup='delta'
+            ), row=6, col=1)
+            
+            fig.update_yaxes(title_text="Gap (s)", row=6, col=1)
+            fig.update_xaxes(title_text="Distance (m)", row=6, col=1)
+            
+        except Exception as e:
+            logger.warning(f"Could not calc delta: {e}")
 
         fig.update_layout(
             title=f"Telemetry Comparison: {driver1} vs {driver2} ({title_suffix})",
-            height=900,
+            height=1000,
             hovermode="x unified",
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
@@ -135,7 +167,7 @@ def plot_telemetry_comparison(session, driver1, driver2, lap_number=None):
         fig.update_yaxes(title_text="On/Off", row=3, col=1, range=[0, 1.1])
         fig.update_yaxes(title_text="Gear", row=4, col=1)
         fig.update_yaxes(title_text="RPM", row=5, col=1)
-        fig.update_xaxes(title_text="Distance (m)", row=5, col=1)
+        # Row 6 handled above
         
         return fig
         
@@ -259,4 +291,184 @@ def plot_gear_shift_trace(session, driver=None):
         return fig
     except Exception as e:
         logger.error(f"Error plotting gear shifts: {e}")
+        return None
+
+def plot_corner_performance(session):
+    """
+    Analyze cornering performance by binning speed into Low/Med/High buckets.
+    """
+    try:
+        laps = session.laps
+        drivers = laps['Driver'].unique()
+        
+        # Prepare data containers
+        corner_stats = []
+        
+        for driver in drivers:
+            lap = laps.pick_driver(driver).pick_fastest()
+            if lap is not None and not lap.empty:
+                try:
+                    tel = lap.get_car_data().add_distance()
+                    
+                    # Define buckets
+                    # Low: < 120 km/h
+                    # Med: 120 - 230 km/h
+                    # High: > 230 km/h
+                    
+                    low = tel[tel['Speed'] < 120]['Speed'].mean()
+                    med = tel[(tel['Speed'] >= 120) & (tel['Speed'] <= 230)]['Speed'].mean()
+                    high = tel[tel['Speed'] > 230]['Speed'].mean()
+                    
+                    corner_stats.append({
+                        'Driver': driver,
+                        'Slow Corners': low if not np.isnan(low) else 0,
+                        'Medium Corners': med if not np.isnan(med) else 0,
+                        'High Speed': high if not np.isnan(high) else 0
+                    })
+                except:
+                    continue
+                    
+        if not corner_stats:
+            return None
+            
+        df_stats = pd.DataFrame(corner_stats).set_index('Driver')
+        
+        # Normalize for heatmap (0-100 relative to field)
+        # Or just plot raw speed heat
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=df_stats.values,
+            x=df_stats.columns,
+            y=df_stats.index,
+            colorscale='Viridis',
+            text=np.round(df_stats.values, 1),
+            texttemplate="%{text}",
+            colorbar=dict(title="Avg Speed (km/h)")
+        ))
+        
+        fig.update_layout(
+            title="Cornering Mastery Matrix (Avg Speed by Zone)",
+            title_x=0.5,
+            height=max(400, len(drivers)*30),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            xaxis=dict(side='top')
+        )
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error plotting corner analysis: {e}")
+        return None
+
+def plot_tyre_shape(session, driver):
+    """
+    Visualize tyre stints as concentric donuts or simple donut.
+    Shows the tyre compound color and laps driven.
+    """
+    try:
+        from config import TEAM_COLORS
+        # Compound Colors (Standard Pirelli)
+        comp_colors = {
+            'SOFT': '#FF3333', 'MEDIUM': '#FFD700', 'HARD': '#FFFFFF', 
+            'INTERMEDIATE': '#43B02A', 'WET': '#0067AD', 'UNKNOWN': '#888888'
+        }
+        
+        # Get stints
+        laps = session.laps.pick_driver(driver)
+        stints = []
+        current_stint = []
+        last_compound = None
+        
+        # Identify stints logic (simplified)
+        for i, lap in laps.iterrows():
+            comp = lap.get('Compound', 'UNKNOWN')
+            if pd.isna(comp): comp = 'UNKNOWN'
+            
+            if last_compound and comp != last_compound:
+                stints.append({'compound': last_compound, 'laps': len(current_stint)})
+                current_stint = []
+            
+            last_compound = comp
+            current_stint.append(lap)
+            
+        if current_stint:
+            stints.append({'compound': last_compound, 'laps': len(current_stint)})
+            
+        # Prepare Donut Data
+        labels = []
+        values = []
+        colors = []
+        
+        for idx, s in enumerate(stints):
+            c_name = str(s['compound']).upper()
+            labels.append(f"Stint {idx+1} ({c_name})")
+            values.append(s['laps'])
+            colors.append(comp_colors.get(c_name, '#888'))
+            
+        fig = go.Figure(data=[go.Pie(
+            labels=labels, 
+            values=values, 
+            hole=.6,
+            marker_colors=colors,
+            sort=False,
+            textinfo='label+value',
+            textposition='inside'
+        )])
+        
+        fig.update_layout(
+            title=f"Tyre Usage - {driver}",
+            showlegend=False,
+            height=300,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+             annotations=[dict(text=driver, x=0.5, y=0.5, font_size=20, showarrow=False, font=dict(color='white'))]
+        )
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error plotting tyre shape: {e}")
+        return None
+
+def plot_circuit_context(session, highlight_sector=None):
+    """
+    Plot a mini-map of the circuit for context.
+    Can highlight a specific sector or point.
+    """
+    try:
+        lap = session.laps.pick_fastest()
+        if lap is None: return None
+        
+        tel = lap.get_telemetry()
+        x = tel['X']
+        y = tel['Y']
+        
+        fig = go.Figure(go.Scatter(
+            x=x, y=y,
+            mode='lines',
+            line=dict(color='gray', width=2),
+            hoverinfo='skip'
+        ))
+        
+        # Highlight logic (placeholder for sector highlighting)
+        if highlight_sector:
+             # Logic to find sector segment would go here
+             pass
+             
+        fig.update_layout(
+            height=200,
+            width=200,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(visible=False, scaleanchor='y'),
+            yaxis=dict(visible=False),
+            margin=dict(l=0, r=0, t=0, b=0),
+            showlegend=False
+        )
+        return fig
+    except Exception as e:
+        logger.error(f"Error plotting circuit context: {e}")
         return None

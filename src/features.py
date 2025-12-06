@@ -158,3 +158,26 @@ def prepare_features(
     except Exception as e:
         logger.exception(f"Error preparing features: {e}")
         raise
+
+
+def calculate_degradation_curve(compound: str) -> float:
+    """
+    Calculate time loss per lap due to tire wear (seconds).
+    Returns the degradation factor (s/lap).
+    """
+    c = str(compound).upper()
+    if 'SOFT' in c: return 0.12   # High deg
+    if 'MEDIUM' in c: return 0.08 # Medium deg
+    if 'HARD' in c: return 0.04   # Low deg
+    if 'INTER' in c: return 0.05
+    if 'WET' in c: return 0.05
+    return 0.08
+
+
+def calculate_fuel_correction(current_lap: int, total_laps: int) -> float:
+    """
+    Calculate time gained due to fuel burn (seconds).
+    Returns negative time delta (time gained) relative to heavy start.
+    Avg gain ~0.06s per lap driven.
+    """
+    return float(current_lap) * -0.06

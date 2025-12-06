@@ -1138,15 +1138,47 @@ def get_detailed_pit_analysis(session: Any) -> pd.DataFrame:
         DataFrame with detailed pit stop info
     """
     try:
-        pit_stops = session.laps.pick_pit_stops() if session.laps is not None else None
-        if pit_stops is None or pit_stops.empty:
-            return pd.DataFrame()
+        # Check if pit stops data is available directly
+        if hasattr(session, 'pit_stops') and session.pit_stops is not None and not session.pit_stops.empty:
+            pit_data = session.pit_stops.copy()
+            # Rename columns if needed to match expected output
+            if 'Lap' in pit_data.columns:
+                pit_data = pit_data.rename(columns={'Lap': 'LapNumber'})
+                
+        else:
+            # Fallback to laps
+            laps = session.laps
+            pit_stops = laps.pick_pit_stops() if laps is not None else None
             
-        # Basic pit data
-        pit_data = pit_stops[['Driver', 'LapNumber', 'LapTime', 'PitInTime', 'PitOutTime', 'Duration']].copy()
+            if pit_stops is None or pit_stops.empty:
+                return pd.DataFrame()
+            
+            # Select available columns
+            wanted_cols = ['Driver', 'LapNumber', 'LapTime', 'PitInTime', 'PitOutTime', 'Duration']
+            avail_cols = [c for c in wanted_cols if c in pit_stops.columns]
+            
+            pit_data = pit_stops[avail_cols].copy()
+            
+            # Calculate duration if missing
+            if 'Duration' not in pit_data.columns and 'PitInTime' in pit_data.columns and 'PitOutTime' in pit_data.columns:
+                pit_data['Duration'] = (pit_data['PitOutTime'] - pit_data['PitInTime']).dt.total_seconds()
         
+        # Helper to safely get team
+        def get_team_safe(drv):
+            try:
+                if hasattr(session, 'get_driver'):
+                    return session.get_driver(drv)['TeamName']
+                return "Unknown"
+            except:
+                return "Unknown"
+
         # Add Team
-        pit_data['Team'] = pit_data['Driver'].apply(lambda d: get_driver_team(session, d))
+        if 'Team' not in pit_data.columns:
+            pit_data['Team'] = pit_data['Driver'].apply(get_team_safe)
+            
+        # Ensure Duration is numeric
+        if 'Duration' in pit_data.columns:
+             pit_data['Duration'] = pd.to_numeric(pit_data['Duration'], errors='coerce')
         
         # Add Track Status context if available
         # This requires checking track status at PitInTime
