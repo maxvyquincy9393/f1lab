@@ -190,6 +190,18 @@ def setup_fastf1_cache():
     return cache_dir
 
 
+def show_plotly_chart(fig, use_container_width=True):
+    """Display Plotly chart with hidden toolbar and logo."""
+    config = {
+        'displayModeBar': False,  # Hide the entire toolbar
+        'displaylogo': False,     # Hide Plotly logo
+        'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d', 'zoomIn2d', 'zoomOut2d', 
+                                   'autoScale2d', 'resetScale2d', 'toImage'],
+        'staticPlot': False       # Keep it interactive
+    }
+    st.plotly_chart(fig, use_container_width=use_container_width, config=config)
+
+
 @st.cache_data(ttl=3600)
 def load_race_data():
     """Load and cache race data with combined race + sprint points."""
@@ -391,7 +403,7 @@ def render_overview_tab(df, total_points_combined=None):
                 font=dict(color='white'),
                 margin=dict(l=10, r=120, t=10, b=40)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
     
     with col2:
         st.markdown("**Constructors Championship**")
@@ -428,7 +440,7 @@ def render_overview_tab(df, total_points_combined=None):
                 font=dict(color='white'),
                 margin=dict(l=10, r=120, t=10, b=40)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
     
     # Points progression
     st.subheader("Championship Points Progression")
@@ -465,7 +477,7 @@ def render_overview_tab(df, total_points_combined=None):
             font=dict(color='white'),
             legend=dict(orientation='h', yanchor='bottom', y=1.02)
         )
-        st.plotly_chart(fig, use_container_width=True)
+        show_plotly_chart(fig, use_container_width=True)
 
 
 def render_drivers_tab(df, total_points_combined=None):
@@ -578,7 +590,7 @@ def render_drivers_tab(df, total_points_combined=None):
                 legend=dict(orientation='h', y=1.1),
                 margin=dict(l=10, r=10, t=10, b=10)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
             
             # Results Table
             with st.expander("Full 2025 Results"):
@@ -901,7 +913,7 @@ def render_teams_tab(df):
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
         
         with col2:
             # Average position comparison - fix color issue
@@ -924,7 +936,7 @@ def render_teams_tab(df):
                 font=dict(color='white'),
                 height=400
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
         
         # Points progression
         st.subheader("Team Points Progression")
@@ -953,7 +965,7 @@ def render_teams_tab(df):
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white')
         )
-        st.plotly_chart(fig, use_container_width=True)
+        show_plotly_chart(fig, use_container_width=True)
 
 
 def render_race_detail_tab(df):
@@ -1105,7 +1117,7 @@ def render_race_detail_tab(df):
                     font=dict(color='white'),
                     xaxis=dict(range=[0, max(pit_stops['PitTime'].max() * 1.1, 30)])
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                show_plotly_chart(fig, use_container_width=True)
                 
                 # Detailed pit stop table
                 st.markdown("**Detailed Pit Stop Data**")
@@ -1192,7 +1204,7 @@ def render_race_detail_tab(df):
                     plot_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='white')
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                show_plotly_chart(fig, use_container_width=True)
             
             if flag_events is not None and len(flag_events) > 0:
                 st.subheader("Flag Events")
@@ -1256,7 +1268,7 @@ def render_race_detail_tab(df):
                         )
                         fig.update_yaxes(title_text="Time (s)")
                         fig.update_xaxes(title_text="Lap")
-                        st.plotly_chart(fig, use_container_width=True)
+                        show_plotly_chart(fig, use_container_width=True)
                         
                         # Best sectors table
                         st.markdown("**Best Sector Times:**")
@@ -1312,7 +1324,7 @@ def render_race_detail_tab(df):
                         font=dict(color='white'),
                         margin=dict(r=100)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    show_plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Speed trap data not available")
 
@@ -1387,7 +1399,7 @@ def render_race_detail_tab(df):
                         margin=dict(l=10, r=120, t=40, b=40),
                         xaxis=dict(zeroline=True, zerolinecolor='white', zerolinewidth=1)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    show_plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     # Grid vs Finish Position comparison
@@ -1426,7 +1438,7 @@ def render_race_detail_tab(df):
                         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
                         xaxis=dict(tickangle=45)
                     )
-                    st.plotly_chart(fig2, use_container_width=True)
+                    show_plotly_chart(fig2, use_container_width=True)
                 
                 st.divider()
                 
@@ -1508,7 +1520,7 @@ def render_race_detail_tab(df):
                             font=dict(color='white'),
                             legend=dict(orientation='h', yanchor='bottom', y=1.02)
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        show_plotly_chart(fig, use_container_width=True)
                         
                         # Fastest laps table
                         st.markdown("**Fastest Laps:**")
@@ -1620,7 +1632,7 @@ def render_race_analysis_tab(df):
                     
                     fig.update_layout(title="Lap Time Evolution", xaxis_title="Lap", yaxis_title="Time (s)",
                         height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                    st.plotly_chart(fig, use_container_width=True)
+                    show_plotly_chart(fig, use_container_width=True)
                     
                     # Fastest laps table
                     st.markdown("**Fastest Laps:**")
@@ -1679,7 +1691,7 @@ def render_race_analysis_tab(df):
                             line=dict(color=TEAM_COLORS.get(team_b, '#00FF00'), width=2)))
                         fig.update_layout(title=f"{drv_a} vs {drv_b}", xaxis_title="Lap", yaxis_title="Time (s)",
                             height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                        st.plotly_chart(fig, use_container_width=True)
+                        show_plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"Error: {e}")
     
@@ -1720,7 +1732,7 @@ def render_race_analysis_tab(df):
                     height=max(450, len(drivers)*25), barmode='overlay', paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'),
                     yaxis=dict(categoryorder='array', categoryarray=drivers[::-1]))
-                st.plotly_chart(fig, use_container_width=True)
+                show_plotly_chart(fig, use_container_width=True)
                 
                 col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
@@ -1784,7 +1796,7 @@ def render_race_analysis_tab(df):
                         
                         fig.update_layout(title=f"Gap to Leader ({leader_name})", xaxis_title="Lap", yaxis_title="Gap (s)",
                             height=500, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                        st.plotly_chart(fig, use_container_width=True)
+                        show_plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No lap data")
         except Exception as e:
@@ -1808,7 +1820,7 @@ def render_race_analysis_tab(df):
                         with st.spinner("Generating 3D Map..."):
                             fig_3d = plot_track_3d(session, driver=driver_arg)
                             if fig_3d:
-                                st.plotly_chart(fig_3d, use_container_width=True)
+                                show_plotly_chart(fig_3d, use_container_width=True)
                             else:
                                 st.error("Could not generate map (missing telemetry?)")
             except Exception as e:
@@ -2033,7 +2045,7 @@ def render_race_analysis_tab(df):
                                     )
                                 )
                                 
-                                st.plotly_chart(fig, use_container_width=True)
+                                show_plotly_chart(fig, use_container_width=True)
                                 st.caption(f"Animation: {len(interpolated_data)} drivers, {num_points} frames. Click Play to start.")
             
             # Show static track preview
@@ -2064,7 +2076,7 @@ def render_race_analysis_tab(df):
                                     yaxis=dict(visible=False),
                                     margin=dict(l=0, r=0, t=0, b=0)
                                 )
-                                st.plotly_chart(fig_preview, use_container_width=True)
+                                show_plotly_chart(fig_preview, use_container_width=True)
             except:
                 pass
                 
@@ -2105,7 +2117,7 @@ def render_race_analysis_tab(df):
                         fig.update_layout(title=f"Lap {selected_lap}/{int(total_laps)}", xaxis=dict(visible=False, range=[0,110]),
                             yaxis=dict(categoryorder='array', categoryarray=lap_pos.sort_values('Position', ascending=False)['Driver'].tolist()),
                             height=max(400, len(lap_pos)*25), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                        st.plotly_chart(fig, use_container_width=True)
+                        show_plotly_chart(fig, use_container_width=True)
                     
                     # Position evolution
                     st.markdown("**Position Evolution**")
@@ -2117,7 +2129,7 @@ def render_race_analysis_tab(df):
                     fig2.update_layout(title="Position Changes", xaxis_title="Lap", yaxis_title="Position",
                         yaxis=dict(autorange='reversed', dtick=1), height=500, paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                    st.plotly_chart(fig2, use_container_width=True)
+                    show_plotly_chart(fig2, use_container_width=True)
             else:
                 st.info("No lap data")
         except Exception as e:
@@ -2173,7 +2185,7 @@ def render_race_analysis_tab(df):
                             line=dict(color=color_b, width=2)))
                         fig.update_layout(title=f"{battle_a} vs {battle_b}", xaxis_title="Lap", yaxis_title="Time (s)",
                             height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                        st.plotly_chart(fig, use_container_width=True)
+                        show_plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No lap data")
         except Exception as e:
@@ -2197,14 +2209,14 @@ def render_race_analysis_tab(df):
                     text=pit_stops['Driver'], hovertemplate="%{text}<br>Lap: %{x}<br>Time: %{y:.1f}s<extra></extra>"))
                 fig.update_layout(title="Pit Stop Distribution", xaxis_title="Lap", yaxis_title="Time (s)",
                     height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                st.plotly_chart(fig, use_container_width=True)
+                show_plotly_chart(fig, use_container_width=True)
                 
                 pit_laps = pit_stops.groupby('Lap').size().reset_index(name='Stops')
                 fig2 = go.Figure()
                 fig2.add_trace(go.Bar(x=pit_laps['Lap'], y=pit_laps['Stops'], marker_color='#E10600'))
                 fig2.update_layout(title="Pit Windows", xaxis_title="Lap", yaxis_title="Stops",
                     height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                st.plotly_chart(fig2, use_container_width=True)
+                show_plotly_chart(fig2, use_container_width=True)
             else:
                 st.info("No pit stop data")
         except Exception as e:
@@ -2258,7 +2270,7 @@ def render_race_analysis_tab(df):
                             line=dict(color=TEAM_COLORS.get(row['Team'], '#888888'))))
                     fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100]), bgcolor='rgba(0,0,0,0)'),
                         height=450, paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                    st.plotly_chart(fig, use_container_width=True)
+                    show_plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No lap data")
         except Exception as e:
@@ -2290,17 +2302,17 @@ def render_race_analysis_tab(df):
                     with st.spinner("Generating detailed telemetry..."):
                         fig = plot_telemetry_comparison(session, drv1, drv2, selected_lap)
                         if fig:
-                            st.plotly_chart(fig, use_container_width=True)
+                            show_plotly_chart(fig, use_container_width=True)
                             
                             # Also show gear shift map
                             st.subheader("Gear Shift Analysis")
                             c1, c2 = st.columns(2)
                             with c1:
                                 fig_g1 = plot_gear_shift_trace(session, drv1)
-                                if fig_g1: st.plotly_chart(fig_g1, use_container_width=True)
+                                if fig_g1: show_plotly_chart(fig_g1, use_container_width=True)
                             with c2:
                                 fig_g2 = plot_gear_shift_trace(session, drv2)
-                                if fig_g2: st.plotly_chart(fig_g2, use_container_width=True)
+                                if fig_g2: show_plotly_chart(fig_g2, use_container_width=True)
                         else:
                             st.error("Could not generate telemetry plot")
             else:
@@ -2428,7 +2440,7 @@ def render_prediction_tab(df, total_points_combined=None):
                 fig = px.bar(importances, x='Importance', y='Feature', orientation='h',
                              title="Model Feature Importance")
                 fig.update_layout(yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig, use_container_width=True)
+                show_plotly_chart(fig, use_container_width=True)
                 
                 st.markdown("""
                 **Key Factors:**
@@ -2566,19 +2578,19 @@ def render_telemetry_tab(df):
             
             with col1:
                 fig = create_gauge(latest_speed, max_speed, "SPEED (km/h)", team_color)
-                st.plotly_chart(fig, use_container_width=True, key="speed_gauge")
+                show_plotly_chart(fig, use_container_width=True, key="speed_gauge")
             
             with col2:
                 fig = create_gauge(latest_throttle, 100, "THROTTLE (%)", "#00FF00")
-                st.plotly_chart(fig, use_container_width=True, key="throttle_gauge")
+                show_plotly_chart(fig, use_container_width=True, key="throttle_gauge")
             
             with col3:
                 fig = create_gauge(latest_brake, 100, "BRAKE (%)", "#FF0000")
-                st.plotly_chart(fig, use_container_width=True, key="brake_gauge")
+                show_plotly_chart(fig, use_container_width=True, key="brake_gauge")
             
             with col4:
                 fig = create_gauge(latest_rpm, max_rpm, "RPM", "#FFD700")
-                st.plotly_chart(fig, use_container_width=True, key="rpm_gauge")
+                show_plotly_chart(fig, use_container_width=True, key="rpm_gauge")
             
             st.divider()
             
@@ -2605,7 +2617,7 @@ def render_telemetry_tab(df):
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
             
             # Throttle/Brake trace
             st.subheader("Throttle & Brake Trace")
@@ -2641,7 +2653,7 @@ def render_telemetry_tab(df):
                 font=dict(color='white'),
                 legend=dict(orientation='h', yanchor='bottom', y=1.02)
             )
-            st.plotly_chart(fig, use_container_width=True)
+            show_plotly_chart(fig, use_container_width=True)
             
             # Gear and DRS
             col1, col2 = st.columns(2)
@@ -2665,7 +2677,7 @@ def render_telemetry_tab(df):
                         plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='white')
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    show_plotly_chart(fig, use_container_width=True)
             
             with col2:
                 st.subheader("DRS Status")
@@ -2689,7 +2701,7 @@ def render_telemetry_tab(df):
                         plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='white')
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    show_plotly_chart(fig, use_container_width=True)
             
             # Track Map with Speed
             st.subheader("Track Map - Speed Visualization")
@@ -2720,7 +2732,7 @@ def render_telemetry_tab(df):
                     yaxis=dict(visible=False, scaleanchor='x'),
                     showlegend=False
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                show_plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Track position data not available for this lap")
             
@@ -2919,7 +2931,7 @@ def render_qualifying_tab():
                 # 1. Evolution Plot
                 st.subheader("Lap Time Evolution")
                 fig_evo = plot_qualifying_evolution(session)
-                if fig_evo: st.plotly_chart(fig_evo, use_container_width=True)
+                if fig_evo: show_plotly_chart(fig_evo, use_container_width=True)
                 else: st.info("Evolution data unavailable")
                 
                 col1, col2 = st.columns(2)
@@ -2928,13 +2940,13 @@ def render_qualifying_tab():
                 with col1:
                     st.subheader("Gap to Pole")
                     fig_gap = plot_qualifying_gap(session)
-                    if fig_gap: st.plotly_chart(fig_gap, use_container_width=True)
+                    if fig_gap: show_plotly_chart(fig_gap, use_container_width=True)
                     
                 # 3. Sector Dominance
                 with col2:
                     st.subheader("Sector Dominance")
                     fig_sec = plot_sector_dominance(session)
-                    if fig_sec: st.plotly_chart(fig_sec, use_container_width=True)
+                    if fig_sec: show_plotly_chart(fig_sec, use_container_width=True)
             else:
                 st.error("Could not load session")
 
