@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import local modules
-from config import TEAM_COLORS, DRIVER_PROFILES, F1_2025_COMPLETED_RACES, F1_2025_CALENDAR, F1_2025_RACE_NAMES, STREAMLIT_CONFIG
+from config import TEAM_COLORS, DRIVER_PROFILES, F1_2025_COMPLETED_RACES, F1_2025_CALENDAR, F1_2025_RACE_NAMES, STREAMLIT_CONFIG, SOCIAL_MEDIA_CONFIG
 from loader import load_data as load_csv_data, clean_data, load_combined_data
 from analysis import calculate_driver_stats, calculate_team_stats, calculate_combined_constructor_standings, calculate_teammate_comparison
 from config import DATA_FILES
@@ -35,7 +35,8 @@ from fastf1_extended import (
     get_position_changes, get_flag_events,
     get_race_results, get_session_schedule, get_gaps_to_leader,
     get_tyre_degradation, get_best_sectors, get_top_speeds,
-    export_session_to_csv, get_circuit_layout_info
+    export_session_to_csv, get_circuit_layout_info,
+    get_race_control_messages, get_detailed_pit_analysis
 )
 from model import load_trained_model
 from features import prepare_features
@@ -78,7 +79,13 @@ st.markdown("""
     /* Hide Streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* Aggressive Height Reduction for Header */
+    header {visibility: hidden !important;}
+    [data-testid="stHeader"] {display: none !important;}
+    [data-testid="stToolbar"] {display: none !important;}
+    
+    /* Hide specific deploy button */
+    .stDeployButton {display: none !important;}
     
     /* Hide Fork button and GitHub link */
     .viewerBadge_container__1QSob {display: none;}
@@ -529,6 +536,30 @@ def render_drivers_tab(df, total_points_combined=None):
             **Seasons:** {2025 - profile.get('debut', 2025) if isinstance(profile.get('debut'), int) else 'N/A'}
             """)
             st.info(profile.get('bio', ''))
+
+            # Social Media
+            st.markdown("### Connect")
+            cols_social = st.columns(len(SOCIAL_MEDIA_CONFIG))
+            for idx, (platform, conf) in enumerate(SOCIAL_MEDIA_CONFIG.items()):
+                handle = profile.get(platform)
+                if handle:
+                    url = f"{conf['url_prefix']}{handle.replace('@', '')}"
+                    with cols_social[idx]:
+                         st.markdown(f"[{platform.capitalize()}]({url})")
+            
+            # Career Stats
+            if 'titles' in profile:
+                st.markdown("### Career Highlights")
+                c_data = {
+                    "Metric": ["World Titles", "Grand Prix Wins", "Pole Positions", "Podiums"],
+                    "Value": [
+                        profile.get('titles', 0),
+                        profile.get('wins', 0),
+                        profile.get('poles', 0),
+                        profile.get('podiums', 0)
+                    ]
+                }
+                st.dataframe(pd.DataFrame(c_data), hide_index=True, use_container_width=True)
 
         with col_stats:
             # 2025 Season Performance
@@ -1594,7 +1625,8 @@ def render_race_analysis_tab(df):
     analysis_tabs = st.tabs([
         "Lap Analysis", "Pace Comparison", "Stint Analysis", 
         "Gap Chart", "Track Visualization", "Position Chart", "Battle Analysis",
-        "Strategy Tools", "Driver Scores", "Telemetry Compare"
+        "Strategy Tools", "Driver Scores", "Telemetry Compare",
+        "Race Control", "Engineering"
     ])
     
     # Load session
@@ -2319,6 +2351,71 @@ def render_race_analysis_tab(df):
                 st.info("No session data")
         except Exception as e:
             st.error(f"Error: {e}")
+
+    # TAB 10: RACE CONTROL
+    with analysis_tabs[10]:
+        st.subheader("Race Control Events")
+        try:
+             rc_msgs = get_race_control_messages(session)
+             if not rc_msgs.empty:
+                 # Color code flags
+                 def highlight_flag(val):
+                     color = ''
+                     val_str = str(val).upper()
+                     if 'RED' in val_str: color = 'background-color: #ff4b4b; color: white'
+                     elif 'YELLOW' in val_str: color = 'background-color: #fca130; color: black'
+                     elif 'GREEN' in val_str: color = 'background-color: #09ab3b; color: white'
+                     elif 'BLACK' in val_str: color = 'background-color: black; color: white'
+                     elif 'BLUE' in val_str: color = 'background-color: #0068c9; color: white'
+                     return color
+
+                 st.dataframe(rc_msgs.style.map(highlight_flag, subset=['Flag']), 
+                     use_container_width=True, hide_index=True)
+             else:
+                 st.info("No race control messages available.")
+        except Exception as e:
+            st.error(f"Error loading race control: {e}")
+
+    # TAB 11: ENGINEERING
+    with analysis_tabs[11]:
+        st.subheader("Engineering & Reliability")
+        eng_tabs = st.tabs(["Pit Stop Details", "Tyre Degradation"])
+        
+        with eng_tabs[0]:
+            st.markdown("#### Comprehensive Pit Analysis")
+            try:
+                pit_detailed = get_detailed_pit_analysis(session)
+                if not pit_detailed.empty:
+                    st.dataframe(pit_detailed, use_container_width=True, hide_index=True)
+                    
+                    # Pit Duration Distribution
+                    fig_pit = px.histogram(pit_detailed, x="Duration", nbins=20, 
+                        title="Pit Stop Duration Distribution", color_discrete_sequence=['#00D2BE'])
+                    fig_pit.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
+                    show_plotly_chart(fig_pit, use_container_width=True)
+                else:
+                    st.info("No pit detail data.")
+            except Exception as e:
+                st.error(f"Error in pit analysis: {e}")
+
+        with eng_tabs[1]:
+             st.markdown("#### Tyre Life Estimation")
+             try:
+                 laps = session.laps
+                 if laps is not None and not laps.empty:
+                    drivers = st.multiselect("Select Drivers", sorted(laps['Driver'].unique()), default=[laps['Driver'].iloc[0]], key="eng_tyre_drv")
+                    if drivers:
+                        fig_deg = go.Figure()
+                        for d in drivers:
+                            d_laps = laps.pick_driver(d).pick_quicklaps()
+                            if not d_laps.empty:
+                                fig_deg.add_trace(go.Scatter(x=d_laps['TyreLife'], y=d_laps['LapTime'].dt.total_seconds(),
+                                    mode='markers', name=d))
+                        fig_deg.update_layout(title="Lap Time vs Tyre Life", xaxis_title="Tyre Life (Laps)", 
+                            yaxis_title="Time (s)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
+                        show_plotly_chart(fig_deg, use_container_width=True)
+             except Exception as e:
+                 st.error(f"Error in tyre degradation: {e}")
 
 
 def render_prediction_tab(df, total_points_combined=None):

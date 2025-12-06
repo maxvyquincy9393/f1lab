@@ -1087,3 +1087,77 @@ def export_session_to_csv(session: Any) -> Dict[str, str]:
         logger.error(f"Error exporting session data: {e}")
         return {}
 
+
+# ============================================================
+# RACE CONTROL & EVENTS
+# ============================================================
+
+def get_race_control_messages(session: Any) -> pd.DataFrame:
+    """
+    Get race control messages (flags, penalties, SC).
+    
+    Args:
+        session: FastF1 Session object
+        
+    Returns:
+        DataFrame with race control messages
+    """
+    try:
+        if not hasattr(session, 'race_control_messages'):
+            return pd.DataFrame()
+            
+        rcm = session.race_control_messages
+        if rcm is None or rcm.empty:
+            return pd.DataFrame()
+            
+        # Select and rename columns for display
+        display_cols = ['Time', 'Category', 'Message', 'Flag', 'Scope', 'Sector', 'Lap']
+        valid_cols = [c for c in display_cols if c in rcm.columns]
+        
+        df = rcm[valid_cols].copy()
+        
+        # Format time
+        if 'Time' in df.columns:
+            df['Time'] = df['Time'].apply(lambda x: format_f1_time(x) if pd.notna(x) else "")
+            
+        return df
+        
+    except Exception as e:
+        logger.error(f"Error getting race control messages: {e}")
+        return pd.DataFrame()
+
+
+def get_detailed_pit_analysis(session: Any) -> pd.DataFrame:
+    """
+    Get pit stops with detailed context (SC, Flags).
+    
+    Args:
+        session: FastF1 Session object
+        
+    Returns:
+        DataFrame with detailed pit stop info
+    """
+    try:
+        pit_stops = session.laps.pick_pit_stops() if session.laps is not None else None
+        if pit_stops is None or pit_stops.empty:
+            return pd.DataFrame()
+            
+        # Basic pit data
+        pit_data = pit_stops[['Driver', 'LapNumber', 'LapTime', 'PitInTime', 'PitOutTime', 'Duration']].copy()
+        
+        # Add Team
+        pit_data['Team'] = pit_data['Driver'].apply(lambda d: get_driver_team(session, d))
+        
+        # Add Track Status context if available
+        # This requires checking track status at PitInTime
+        if hasattr(session, 'track_status'):
+            # This is complex to map exactly, simplified for now:
+            # Check if any SC/VSC was active during the lap
+            # 4=SC, 6=VSC, 7=VSC ending
+            pass # TODO: Implement precise track status mapping
+            
+        return pit_data
+        
+    except Exception as e:
+        logger.error(f"Error getting detailed pit analysis: {e}")
+        return pd.DataFrame()

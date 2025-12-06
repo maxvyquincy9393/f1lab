@@ -883,6 +883,30 @@ def get_config() -> Dict:
     }
 
 
+
+# ============================================================
+# DRIVER DATA MERGE
+# ============================================================
+
+# Merge detailed stats into main profiles
+for driver, details in DRIVER_DETAILS.items():
+    # Normalize name matching (e.g. Alex Albon vs Alexander Albon)
+    matched_name = None
+    for profile_name in DRIVER_PROFILES.keys():
+        if driver.split()[-1] == profile_name.split()[-1]: # Match by last name
+            matched_name = profile_name
+            break
+            
+    if matched_name:
+        DRIVER_PROFILES[matched_name].update(details)
+
+# Configure display names for social media
+SOCIAL_MEDIA_CONFIG = {
+    'twitter': {'icon': 'twitter', 'url_prefix': 'https://twitter.com/'},
+    'instagram': {'icon': 'instagram', 'url_prefix': 'https://instagram.com/'}
+}
+
+
 if __name__ == '__main__':
     # Print configuration summary
     print("F1 Visualization Configuration")
