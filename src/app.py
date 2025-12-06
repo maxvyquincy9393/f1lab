@@ -85,7 +85,11 @@ st.markdown("""
     [data-testid="stToolbar"] {display: none !important;}
     
     /* Hide specific deploy button */
+    /* Hide specific deploy button and badges */
     .stDeployButton {display: none !important;}
+    [data-testid="stAppDeployButton"] {display: none !important;}
+    [data-testid="stStatusWidget"] {display: none !important;}
+    div[class*="stAppDeployButton"] {display: none !important;}
     
     /* Hide Fork button and GitHub link */
     .viewerBadge_container__1QSob {display: none;}

@@ -21,6 +21,7 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.cursorrules
 
 # 2. Virtual Environment
 .venv/
