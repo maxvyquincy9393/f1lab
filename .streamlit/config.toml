@@ -8,20 +8,25 @@ font="sans serif"
 
 [client]
 # Hide "Made with Streamlit" footer
-toolbar.show = false
-showSidebarNav = false
+toolbarMode = "minimal"
+showErrorDetails = false
 
-# Hide Deploy button from top right
-showToolbar = false
-
-[global]
-# Enables or disables the Streamlit telemetry, which is usage statistics
-# sent to Streamlit.
-# If you care about privacy, disable this.
-logTelemetry = false
+[browser]
+# Hide the Fork, GitHub, and settings menu from the app
+gatherUsageStats = false
 
 [server]
 # Set the port that your Streamlit app should run on.
 port = 8501
 maxUploadSize = 200 # MB
 maxMessageSize = 200 # MB
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+
+[global]
+# Enables or disables the Streamlit telemetry, which is usage statistics
+# sent to Streamlit.
+# If you care about privacy, disable this.
+logTelemetry = false
+dataFrameSerialization = "legacy"

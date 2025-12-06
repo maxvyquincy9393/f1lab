@@ -75,6 +75,18 @@ if 'race_detail_selection' not in st.session_state:
 # Custom CSS
 st.markdown("""
 <style>
+    /* Hide Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Hide Fork button and GitHub link */
+    .viewerBadge_container__1QSob {display: none;}
+    .viewerBadge_link__1S137 {display: none;}
+    button[title="View source on GitHub"] {display: none;}
+    a[href*="github.com"] {display: none !important;}
+    
+    /* Custom styling */
     .main-header {
         font-size: 2.5rem;
         font-weight: bold;

@@ -28,6 +28,11 @@ venv/
 env/
 ENV/
 .env
+.env.local
+
+# 3. Streamlit
+.streamlit/secrets.toml
+.streamlit/credentials.toml
 
 # 3. Data & Cache (IMPORTANT)
 # Ignore FastF1 cache to save space
