@@ -11,7 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import fastf1
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from pathlib import Path
 import joblib
@@ -24,24 +24,42 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import local modules
-from config import TEAM_COLORS, DRIVER_PROFILES, F1_2025_COMPLETED_RACES, F1_2025_CALENDAR
+from config import TEAM_COLORS, DRIVER_PROFILES, F1_2025_COMPLETED_RACES, F1_2025_CALENDAR, F1_2025_RACE_NAMES, STREAMLIT_CONFIG
 from loader import load_data as load_csv_data, clean_data, load_combined_data
-from analysis import calculate_driver_stats, calculate_team_stats, calculate_combined_constructor_standings
+from analysis import calculate_driver_stats, calculate_team_stats, calculate_combined_constructor_standings, calculate_teammate_comparison
 from config import DATA_FILES
 from fastf1_extended import (
     get_session_info, get_weather_summary, get_tyre_stints,
     get_pit_stops, get_sector_times, get_speed_data,
     get_track_status, get_car_data, get_position_data,
     get_position_changes, get_flag_events,
-    get_race_results, get_session_schedule, get_gaps_to_leader
+    get_race_results, get_session_schedule, get_gaps_to_leader,
+    get_tyre_degradation, get_best_sectors, get_top_speeds,
+    export_session_to_csv, get_circuit_layout_info
 )
+from model import load_trained_model
+from features import prepare_features
+from fastf1_plotting import (
+    plot_circuit_with_corners, plot_team_pace_comparison, 
+    plot_tyre_strategy_summary, plot_gear_shift_on_track,
+    plot_speed_on_track
+)
+from advanced_viz import plot_telemetry_comparison, plot_track_3d, plot_gear_shift_trace
+from qualifying_viz import plot_qualifying_evolution, plot_qualifying_gap, plot_sector_dominance
+from home import render_home_tab
+import matplotlib.pyplot as plt
 
 # Page config
 st.set_page_config(
-    page_title="F1 2025 Analytics Dashboard",
-    page_icon="https://cdn-icons-png.flaticon.com/512/2418/2418779.png",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title=STREAMLIT_CONFIG.page_title,
+    page_icon=STREAMLIT_CONFIG.page_icon,
+    layout=STREAMLIT_CONFIG.layout,
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get help': None,
+        'Report a bug': None,
+        'About': None # You can put custom text here or None to hide
+    }
 )
 
 # Initialize session state for navigation persistence
@@ -168,7 +186,6 @@ def load_sprint_data():
         return None
 
 
-@st.cache_data(ttl=3600)
 def load_fastf1_session(year: int, race: str, session_type: str):
     """Load FastF1 session with caching."""
     try:
@@ -234,6 +251,23 @@ def create_gauge(value, max_value, title, color="#E10600"):
     return fig
 
 
+def format_f1_time(td: pd.Timedelta) -> str:
+    """Formats a pandas Timedelta object into an F1-style lap time string (M:SS.mmm or H:MM:SS.mmm)."""
+    if pd.isna(td):
+        return "N/A"
+    
+    total_seconds = td.total_seconds()
+    
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    seconds = total_seconds % 60
+    
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{seconds:06.3f}"
+    else:
+        return f"{minutes:d}:{seconds:06.3f}"
+
+
 def render_header():
     """Render dashboard header."""
     st.markdown('<h1 class="main-header">F1 2025 Season Dashboard</h1>', unsafe_allow_html=True)
@@ -241,7 +275,7 @@ def render_header():
 
 
 def render_overview_tab(df, total_points_combined=None):
-    """Tab 1: Season Overview."""
+    """Season Overview tab content."""
     st.header("2025 Season Overview")
     
     if df is None or df.empty:
@@ -312,9 +346,9 @@ def render_overview_tab(df, total_points_combined=None):
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white'),
-                margin=dict(l=10, r=80, t=10, b=40)
+                margin=dict(l=10, r=120, t=10, b=40)
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         st.markdown("**Constructors Championship**")
@@ -349,9 +383,9 @@ def render_overview_tab(df, total_points_combined=None):
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white'),
-                margin=dict(l=10, r=80, t=10, b=40)
+                margin=dict(l=10, r=120, t=10, b=40)
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     # Points progression
     st.subheader("Championship Points Progression")
@@ -388,199 +422,130 @@ def render_overview_tab(df, total_points_combined=None):
             font=dict(color='white'),
             legend=dict(orientation='h', yanchor='bottom', y=1.02)
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def render_drivers_tab(df, total_points_combined=None):
-    """Tab 2: Driver Profiles with Photos and Career Stats."""
+    """Driver Profiles tab content."""
     st.header("Driver Profiles")
     
     if df is None or df.empty:
         st.error("No data available")
         return
     
-    # Get drivers from 2025 data (exclude Jack Doohan who is no longer racing)
-    drivers_2025 = [d for d in df['Driver'].unique().tolist() if d != 'Jack Doohan']
+    drivers_2025 = sorted([d for d in df['Driver'].unique().tolist() if d in DRIVER_PROFILES])
     
-    # Driver selector with session state to preserve selection
-    selected_driver = st.selectbox(
-        "Select Driver", 
-        sorted(drivers_2025),
-        key="driver_profile_selector"
-    )
+    col_sel, _ = st.columns([1, 3])
+    with col_sel:
+        selected_driver = st.selectbox("Select Driver", drivers_2025, key="driver_profile_selector")
     
     if selected_driver:
-        # Get driver profile from config
         profile = DRIVER_PROFILES.get(selected_driver, {})
         driver_df = df[df['Driver'] == selected_driver]
         team = driver_df['Team'].iloc[0] if not driver_df.empty else "Unknown"
         team_color = TEAM_COLORS.get(team, '#666666')
         
-        st.divider()
+        # --- Hero Section ---
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, {team_color} 0%, #0E1117 100%); padding: 2px; border-radius: 10px; margin-bottom: 20px;">
+            <div style="background: #0E1117; border-radius: 8px; padding: 20px;">
+                <h1 style="color: white; margin: 0; font-size: 3rem; text-transform: uppercase; letter-spacing: 2px;">
+                    <span style="color: {team_color};">{profile.get('number', '')}</span> {selected_driver}
+                </h1>
+                <h3 style="color: #888; margin: 0; font-weight: 300;">{team}</h3>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Profile section
-        col1, col2, col3 = st.columns([1, 2, 2])
+        # --- Profile Content ---
+        col_profile, col_stats = st.columns([1, 2])
         
-        with col1:
-            # Driver photo - no border, clean look
+        with col_profile:
             if profile.get('image_url'):
-                st.markdown(f"""
-                <div style="text-align: center;">
-                    <img src="{profile['image_url']}" 
-                         style="width: 200px; height: 200px; border-radius: 15px; 
-                                object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-                    <h2 style="color: white; margin-top: 15px;">{selected_driver}</h2>
-                    <p style="color: {team_color}; font-size: 1.2rem; font-weight: bold;">{team}</p>
-                    <p style="color: #888; font-size: 2rem; font-weight: bold;">#{profile.get('number', '')}</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.image(profile['image_url'], use_container_width=True)
             else:
-                st.markdown(f"""
-                <div style="text-align: center;">
-                    <div style="width: 200px; height: 200px; border-radius: 15px; 
-                                background: linear-gradient(135deg, {team_color}55 0%, #1a1a2e 100%);
-                                display: flex; align-items: center; justify-content: center;
-                                margin: 0 auto; font-size: 4rem; color: white;
-                                box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-                        {selected_driver[0]}
-                    </div>
-                    <h2 style="color: white; margin-top: 15px;">{selected_driver}</h2>
-                    <p style="color: {team_color}; font-size: 1.2rem; font-weight: bold;">{team}</p>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        with col2:
-            st.subheader("Biography")
-            
-            # Driver info - use correct field names from config
-            number = profile.get('number', 'N/A')
-            country = profile.get('country', 'Unknown')
-            debut = profile.get('debut_year', 'Unknown')
-            dob = profile.get('date_of_birth', 'Unknown')
-            pob = profile.get('place_of_birth', 'Unknown')
-            bio = profile.get('bio', '')
-            
+                st.warning("Driver image not available")
+                
+            # Biographical Data Table
+            st.markdown("### Biography")
             st.markdown(f"""
-            | Info | Value |
-            |------|-------|
-            | **Number** | {number} |
-            | **Nationality** | {country} |
-            | **Date of Birth** | {dob} |
-            | **Place of Birth** | {pob} |
-            | **F1 Debut** | {debut} |
-            | **Current Team** | {team} |
-            | **Seasons in F1** | {2025 - debut if isinstance(debut, int) else 'N/A'} |
+            **Nationality:** {profile.get('country', 'N/A')}  
+            **Debut:** {profile.get('debut', 'N/A')}  
+            **Seasons:** {2025 - profile.get('debut', 2025) if isinstance(profile.get('debut'), int) else 'N/A'}
             """)
+            st.info(profile.get('bio', ''))
+
+        with col_stats:
+            # 2025 Season Performance
+            st.subheader("2025 Season Performance")
             
-            if bio:
-                st.markdown(f"**Bio:** {bio}")
-        
-        with col3:
-            st.subheader("Career Statistics (All Time)")
-            
-            # Career metrics - use correct field names from config
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.metric("Races", profile.get('career_points', 0) // 10 if profile.get('career_points') else 0)  # Estimate
-                st.metric("Poles", profile.get('career_poles', 0))
-            with c2:
-                st.metric("Wins", profile.get('career_wins', 0))
-                st.metric("Fastest Laps", profile.get('career_fastest_laps', 0))
-            with c3:
-                st.metric("Podiums", profile.get('career_podiums', 0))
-                st.metric("Championships", profile.get('championships', 0))
-        
-        st.divider()
-        
-        # 2025 Season Stats
-        st.subheader("2025 Season Performance")
-        
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            # Season metrics - use combined points if available
+            # Stats Calculation
             race_points = driver_df['Points'].sum()
-            # Get total combined points (race + sprint)
-            if total_points_combined and selected_driver in total_points_combined:
-                total_points = total_points_combined[selected_driver]
-            else:
-                total_points = race_points
+            total_points = total_points_combined.get(selected_driver, race_points) if total_points_combined else race_points
+            wins = len(driver_df[driver_df['Position'] == 1])
+            podiums = len(driver_df[driver_df['Position'] <= 3])
+            avg_pos = driver_df['Position'].mean()
+            best_finish = driver_df['Position'].min() if not driver_df.empty else 0
             
-            races = len(driver_df)
-            avg_position = driver_df['Position'].mean()
-            wins_2025 = len(driver_df[driver_df['Position'] == 1])
-            podiums_2025 = len(driver_df[driver_df['Position'] <= 3])
-            best_finish = driver_df['Position'].min()
-            avg_pts_per_race = total_points / races if races > 0 else 0
+            # Custom Metric Cards
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.markdown(f"<h2 style='text-align:center; color:{team_color}'>{int(total_points)}</h2><p style='text-align:center'>POINTS</p>", unsafe_allow_html=True)
+            with m2:
+                st.markdown(f"<h2 style='text-align:center; color:white'>{wins}</h2><p style='text-align:center'>WINS</p>", unsafe_allow_html=True)
+            with m3:
+                st.markdown(f"<h2 style='text-align:center; color:white'>{podiums}</h2><p style='text-align:center'>PODIUMS</p>", unsafe_allow_html=True)
+            with m4:
+                st.markdown(f"<h2 style='text-align:center; color:white'>P{int(best_finish) if not pd.isna(best_finish) else '-'}</h2><p style='text-align:center'>BEST</p>", unsafe_allow_html=True)
             
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.metric("Races", races)
-                st.metric("Wins", wins_2025)
-                st.metric("Podiums", podiums_2025)
-            with c2:
-                st.metric("Best", f"P{int(best_finish)}")
-                st.metric("Avg Pts/Race", f"{avg_pts_per_race:.1f}")
-                st.metric("Total Points", int(total_points))
-        
-        with col2:
-            # Position chart for 2025
+            st.markdown("---")
+            
+            # Recent Form Chart
+            st.subheader("Recent Form")
+            
             fig = go.Figure()
             
+            # Position Trend
             fig.add_trace(go.Scatter(
                 x=driver_df['Track'],
                 y=driver_df['Position'],
                 mode='lines+markers',
+                name='Finish Position',
                 line=dict(color=team_color, width=3),
-                marker=dict(size=12, color=team_color),
-                fill='tozeroy',
-                fillcolor=f'rgba{tuple(list(int(team_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)) + [0.2])}'
+                marker=dict(size=10, color='white', line=dict(width=2, color=team_color))
             ))
             
+            # Add Qualifying comparison if available (simplified)
+            if 'Starting Grid' in driver_df.columns:
+                fig.add_trace(go.Scatter(
+                    x=driver_df['Track'],
+                    y=driver_df['Starting Grid'],
+                    mode='markers',
+                    name='Grid Position',
+                    marker=dict(size=8, symbol='diamond', color='#888888')
+                ))
+            
             fig.update_layout(
-                title="2025 Race Positions",
-                yaxis=dict(autorange='reversed', title='Position'),
-                xaxis=dict(title='Race', tickangle=45),
+                yaxis=dict(autorange='reversed', title='Position', gridcolor='#333'),
+                xaxis=dict(showgrid=False),
                 height=350,
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='white')
+                font=dict(color='white'),
+                legend=dict(orientation='h', y=1.1),
+                margin=dict(l=10, r=10, t=10, b=10)
             )
-            st.plotly_chart(fig, width='stretch')
-        
-        # Points per race
-        st.subheader("Points Scored per Race")
-        
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=driver_df['Track'],
-            y=driver_df['Points'],
-            marker_color=team_color,
-            text=driver_df['Points'],
-            textposition='outside'
-        ))
-        fig.update_layout(
-            height=300,
-            xaxis=dict(tickangle=45),
-            yaxis_title="Points",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white')
-        )
-        st.plotly_chart(fig, width='stretch')
-        
-        # All 2025 results table
-        st.subheader("2025 Race Results")
-        display_cols = ['Track', 'Position', 'Points', 'Laps'] if 'Laps' in driver_df.columns else ['Track', 'Position', 'Points']
-        st.dataframe(
-            driver_df[display_cols].reset_index(drop=True),
-            width='stretch',
-            hide_index=True
-        )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Results Table
+            with st.expander("Full 2025 Results"):
+                res_cols = ['Track', 'Starting Grid', 'Position', 'Points', 'Laps']
+                valid_cols = [c for c in res_cols if c in driver_df.columns]
+                st.dataframe(driver_df[valid_cols], hide_index=True, use_container_width=True)
 
 
 def render_teams_tab(df):
-    """Tab 3: Team Analysis with car photos and specs."""
+    """Constructor Analysis tab content."""
     st.header("Constructor Analysis")
     
     if df is None or df.empty:
@@ -786,7 +751,7 @@ def render_teams_tab(df):
         
         with col1:
             if team_info.get('car_image'):
-                st.image(team_info['car_image'], width='stretch')
+                st.image(team_info['car_image'], use_container_width=True)
         
         with col2:
             st.markdown(f"""
@@ -893,7 +858,7 @@ def render_teams_tab(df):
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white')
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             # Average position comparison - fix color issue
@@ -916,7 +881,7 @@ def render_teams_tab(df):
                 font=dict(color='white'),
                 height=400
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         # Points progression
         st.subheader("Team Points Progression")
@@ -945,11 +910,11 @@ def render_teams_tab(df):
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white')
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def render_race_detail_tab(df):
-    """Tab 4: Race Details with FastF1 Data."""
+    """Race Weekend Details tab content."""
     st.header("Race Weekend Details")
     
     # Race selector - 2025 only
@@ -1004,7 +969,7 @@ def render_race_detail_tab(df):
                 wind = weather.get('wind_speed_avg')
                 st.metric("Wind Speed", f"{wind:.1f} km/h" if wind is not None else "N/A")
             with col5:
-                rain_status = "🌧️ Yes" if weather.get('rainfall', False) else "☀️ No"
+                rain_status = "Yes" if weather.get('rainfall', False) else "No" # Removed emojis
                 st.metric("Rainfall", rain_status)
         else:
             st.info("Weather data not available for this session")
@@ -1018,6 +983,7 @@ def render_race_detail_tab(df):
             "Tyre Strategy", 
             "Track Status", 
             "Sector Times",
+            "Speed Traps",
             "Position Changes",
             "Lap Times"
         ])
@@ -1029,8 +995,12 @@ def render_race_detail_tab(df):
                 results = session.results
                 if results is not None and not results.empty:
                     display_results = results[['Position', 'Abbreviation', 'FullName', 'TeamName', 'Time', 'Status']].copy()
+                    
+                    # Apply global formatter
+                    display_results['Time'] = display_results['Time'].apply(format_f1_time)
+                    
                     display_results.columns = ['Pos', 'Code', 'Driver', 'Team', 'Time', 'Status']
-                    st.dataframe(display_results, width='stretch', hide_index=True)
+                    st.dataframe(display_results, use_container_width=True, hide_index=True)
             except Exception as e:
                 st.error(f"Could not load results: {e}")
         
@@ -1092,14 +1062,14 @@ def render_race_detail_tab(df):
                     font=dict(color='white'),
                     xaxis=dict(range=[0, max(pit_stops['PitTime'].max() * 1.1, 30)])
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
                 
                 # Detailed pit stop table
                 st.markdown("**Detailed Pit Stop Data**")
                 display_pit = pit_stops.copy()
                 display_pit['PitTime'] = display_pit['PitTime'].apply(lambda x: f"{x:.1f}s")
                 display_pit = display_pit.rename(columns={'Stop': 'Stop #', 'PitTime': 'Duration'})
-                st.dataframe(display_pit, width='stretch', hide_index=True)
+                st.dataframe(display_pit, use_container_width=True, hide_index=True)
             else:
                 st.info("Pit stop data not available")
         
@@ -1116,92 +1086,26 @@ def render_race_detail_tab(df):
                 st.info(f"This is a Sprint Weekend - {selected_race}")
             
             if tyre_data is not None and not tyre_data.empty:
-                # Tyre compound colors and emojis
-                compound_colors = {
-                    'SOFT': '#FF3333',
-                    'MEDIUM': '#FFD700', 
-                    'HARD': '#FFFFFF',
-                    'INTERMEDIATE': '#43B02A',
-                    'WET': '#0067AD',
-                    'UNKNOWN': '#888888'
-                }
-                
-                # Sort drivers by finishing position if available
-                try:
-                    results = session.results
-                    if results is not None and not results.empty:
-                        driver_order = results.sort_values('Position')['Abbreviation'].tolist()
-                    else:
-                        driver_order = tyre_data['Driver'].unique().tolist()
-                except:
-                    driver_order = tyre_data['Driver'].unique().tolist()
-                
-                # Filter to top 20 drivers
-                drivers = [d for d in driver_order if d in tyre_data['Driver'].values][:20]
-                
-                fig = go.Figure()
-                
-                for driver in drivers:
-                    driver_tyres = tyre_data[tyre_data['Driver'] == driver].sort_values('Stint')
-                    
-                    for _, stint in driver_tyres.iterrows():
-                        compound = str(stint.get('Compound', 'MEDIUM')).upper()
-                        start = int(stint.get('StartLap', 1))
-                        end = int(stint.get('EndLap', start + 10))
-                        laps = end - start + 1
-                        color = compound_colors.get(compound, '#888888')
-                        
-                        fig.add_trace(go.Bar(
-                            x=[laps],
-                            y=[driver],
-                            orientation='h',
-                            base=start - 1,
-                            marker_color=color,
-                            marker_line_color='#333333',
-                            marker_line_width=1,
-                            name=compound,
-                            showlegend=False,
-                            text=f"{compound[0]}" if compound != 'UNKNOWN' else "?",
-                            textposition='inside',
-                            textfont=dict(color='black' if compound in ['MEDIUM', 'HARD'] else 'white', size=10),
-                            hovertemplate=f"<b>{driver}</b><br>{compound}<br>Laps {start}-{end} ({laps} laps)<extra></extra>"
-                        ))
-                
-                total_laps = tyre_data['EndLap'].max() if 'EndLap' in tyre_data.columns else 50
-                
-                fig.update_layout(
-                    title="Tyre Strategy - Race Overview",
-                    xaxis_title="Lap",
-                    xaxis=dict(range=[0, total_laps + 2]),
-                    height=max(450, len(drivers) * 25),
-                    barmode='overlay',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='white'),
-                    yaxis=dict(categoryorder='array', categoryarray=drivers[::-1])
-                )
-                st.plotly_chart(fig, width='stretch')
-                
-                # Compound Legend with visual
+                # Compound Legend with visual - Removed emojis
                 st.markdown("---")
                 col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
-                    st.markdown("🔴 **SOFT**")
+                    st.markdown("**SOFT** (Red)")
                 with col2:
-                    st.markdown("🟡 **MEDIUM**")
+                    st.markdown("**MEDIUM** (Yellow)")
                 with col3:
-                    st.markdown("⚪ **HARD**")
+                    st.markdown("**HARD** (White)")
                 with col4:
-                    st.markdown("🟢 **INTERMEDIATE**")
+                    st.markdown("**INTERMEDIATE** (Green)")
                 with col5:
-                    st.markdown("🔵 **WET**")
+                    st.markdown("**WET** (Blue)")
                 
                 # Stint details table
                 with st.expander("View Detailed Stint Data"):
                     display_tyres = tyre_data[['Driver', 'Stint', 'Compound', 'StartLap', 'EndLap', 'Laps']].copy()
                     display_tyres['Stint'] = display_tyres['Stint'] + 1
                     display_tyres = display_tyres.rename(columns={'Stint': 'Stint #', 'StartLap': 'Start', 'EndLap': 'End'})
-                    st.dataframe(display_tyres, width='stretch', hide_index=True)
+                    st.dataframe(display_tyres, use_container_width=True, hide_index=True)
             else:
                 st.info("Tyre strategy data not available")
         
@@ -1245,18 +1149,24 @@ def render_race_detail_tab(df):
                     plot_bgcolor='rgba(0,0,0,0)',
                     font=dict(color='white')
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             if flag_events is not None and len(flag_events) > 0:
                 st.subheader("Flag Events")
                 flag_df = pd.DataFrame(flag_events)
-                st.dataframe(flag_df, width='stretch', hide_index=True)
+                st.dataframe(flag_df, use_container_width=True, hide_index=True)
             else:
                 st.info("Flag event data not available")
         
         with race_tabs[4]:
             # Sector Times
             st.subheader("Sector Times Analysis")
+            
+            # Field Best Sectors
+            with st.expander("View Field Best Sectors"):
+                best_sectors_df = get_best_sectors(session)
+                if not best_sectors_df.empty:
+                    st.dataframe(best_sectors_df, use_container_width=True, hide_index=True)
             
             sector_times = get_sector_times(session)
             
@@ -1287,7 +1197,7 @@ def render_race_detail_tab(df):
                                         x=valid_data['Lap'],
                                         y=valid_data[sector],
                                         mode='lines+markers',
-                                        name=f'S{i}',
+                                        name=f"S{i}",
                                         line=dict(color=colors[i-1], width=2),
                                         marker=dict(size=4)
                                     ),
@@ -1303,7 +1213,7 @@ def render_race_detail_tab(df):
                         )
                         fig.update_yaxes(title_text="Time (s)")
                         fig.update_xaxes(title_text="Lap")
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True)
                         
                         # Best sectors table
                         st.markdown("**Best Sector Times:**")
@@ -1329,6 +1239,41 @@ def render_race_detail_tab(df):
                 st.info("Sector time data not available for this session")
         
         with race_tabs[5]:
+            # Speed Traps
+            st.subheader("Speed Trap Analysis")
+            top_speeds = get_top_speeds(session)
+            
+            if top_speeds is not None and not top_speeds.empty:
+                st.dataframe(top_speeds, use_container_width=True, hide_index=True)
+                
+                if 'Max_SpeedST' in top_speeds.columns:
+                    fig = go.Figure()
+                    # Sort by speed
+                    plot_data = top_speeds.sort_values('Max_SpeedST', ascending=True)
+                    
+                    fig.add_trace(go.Bar(
+                        x=plot_data['Max_SpeedST'],
+                        y=plot_data['Driver'],
+                        orientation='h',
+                        marker_color='#E10600',
+                        text=plot_data['Max_SpeedST'].apply(lambda x: f"{x:.1f}"),
+                        textposition='outside'
+                    ))
+                    
+                    fig.update_layout(
+                        title="Top Speeds (Speed Trap)",
+                        xaxis_title="Speed (km/h)",
+                        height=max(400, len(plot_data) * 25),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font=dict(color='white'),
+                        margin=dict(r=100)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Speed trap data not available")
+
+        with race_tabs[6]:
             # Position Changes - Improved visualization
             st.subheader("Position Changes Throughout Race")
             
@@ -1396,10 +1341,10 @@ def render_race_detail_tab(df):
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='white'),
-                        margin=dict(l=10, r=80, t=40, b=40),
+                        margin=dict(l=10, r=120, t=40, b=40),
                         xaxis=dict(zeroline=True, zerolinecolor='white', zerolinewidth=1)
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 
                 with col2:
                     # Grid vs Finish Position comparison
@@ -1438,7 +1383,7 @@ def render_race_detail_tab(df):
                         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
                         xaxis=dict(tickangle=45)
                     )
-                    st.plotly_chart(fig2, width='stretch')
+                    st.plotly_chart(fig2, use_container_width=True)
                 
                 st.divider()
                 
@@ -1465,13 +1410,13 @@ def render_race_detail_tab(df):
                 available_cols = [c for c in cols_order if c in display_df.columns]
                 display_df = display_df[available_cols].sort_values('FinalPosition')
                 
-                st.dataframe(display_df, width='stretch', hide_index=True)
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
             else:
                 st.info("Position change data not available")
         
-        with race_tabs[6]:
+        with race_tabs[7]:
             # Lap Times Analysis
-            st.subheader("🏁 Lap Time Analysis")
+            st.subheader("Lap Time Analysis") # Removed emoji
             
             try:
                 laps = session.laps
@@ -1520,7 +1465,7 @@ def render_race_detail_tab(df):
                             font=dict(color='white'),
                             legend=dict(orientation='h', yanchor='bottom', y=1.02)
                         )
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True)
                         
                         # Fastest laps table
                         st.markdown("**Fastest Laps:**")
@@ -1531,8 +1476,9 @@ def render_race_detail_tab(df):
                         if not fastest_laps.empty:
                             display_cols = ['Driver', 'LapNumber', 'LapTime', 'Compound']
                             available_cols = [c for c in display_cols if c in fastest_laps.columns]
-                            fastest_display = fastest_laps[available_cols].sort_values('LapTime').head(10)
-                            st.dataframe(fastest_display, width='stretch', hide_index=True)
+                            fastest_display = fastest_laps[available_cols].sort_values('LapTime') # Show all drivers
+                            fastest_display['LapTime'] = fastest_display['LapTime'].apply(format_f1_time) # Apply formatter
+                            st.dataframe(fastest_display, use_container_width=True, hide_index=True)
                 else:
                     st.info("Lap time data not available")
             except Exception as e:
@@ -1540,9 +1486,9 @@ def render_race_detail_tab(df):
 
 
 def render_race_analysis_tab(df):
-    """Tab 5: Comprehensive Race Analysis with advanced features."""
+    """Race Analysis tab content."""
     st.header("Race Analysis Center")
-    st.markdown("*Lap times, Pace comparison, Strategy analysis, 2D Track Animation*")
+    st.markdown("Lap times, Pace comparison, Strategy analysis, Track Visualization") # Removed emojis
     
     if df is None or df.empty:
         st.error("No data available")
@@ -1551,24 +1497,60 @@ def render_race_analysis_tab(df):
     # Race selector
     col1, col2 = st.columns([2, 1])
     with col1:
-        selected_race = st.selectbox("Select Grand Prix", F1_2025_COMPLETED_RACES, key="analysis_race")
+        # Use all races from config, not just completed ones
+        all_races = list(F1_2025_RACE_NAMES.keys())
+        selected_race = st.selectbox("Select Grand Prix", all_races, key="analysis_race")
     with col2:
         session_type = st.selectbox("Session", ["Race", "Qualifying", "Sprint"], key="analysis_session")
     
+    # Check if race has happened or is ongoing
+    try:
+        schedule = fastf1.get_event_schedule(2025)
+        if schedule['EventDate'].dt.tz is None:
+             schedule['EventDate'] = schedule['EventDate'].dt.tz_localize('UTC')
+        
+        # Find event
+        race_event = schedule[schedule['EventName'] == F1_2025_RACE_NAMES.get(selected_race, selected_race)]
+        
+        if not race_event.empty:
+            event = race_event.iloc[0]
+            now = pd.Timestamp.now(tz='UTC')
+            
+            # Check session specific time
+            session_key = 'Session1' # Default
+            if session_type == "Race": session_key = 'Session5'
+            elif session_type == "Qualifying": session_key = 'Session4'
+            elif session_type == "Sprint": session_key = 'Session3'
+            
+            # Map session names loosely if exact key match fails or for standard logic
+            # FastF1 schedule keys: Session1...Session5. We need to find which one corresponds to selected type.
+            # Actually, easier to just check if date is future.
+            
+            # Simple check: is event in future?
+            if event['EventDate'] > (now + timedelta(hours=48)): # More than 2 days in future
+                st.info(f"Analysis not available yet. {selected_race} has not started.")
+                return
+            
+            # More detailed check if we had session times mapping, but simple catch-all exception on load works too.
+    except Exception as e:
+        pass # Ignore schedule check errors, let load fail naturally if needed
+
     # Analysis sub-tabs
     analysis_tabs = st.tabs([
         "Lap Analysis", "Pace Comparison", "Stint Analysis", 
-        "Gap Chart", "2D Track Animation", "Position Chart", "Battle Analysis",
-        "Strategy Tools", "Driver Scores"
+        "Gap Chart", "Track Visualization", "Position Chart", "Battle Analysis",
+        "Strategy Tools", "Driver Scores", "Telemetry Compare"
     ])
     
     # Load session
     with st.spinner("Loading session data..."):
         setup_fastf1_cache()
-        session = load_fastf1_session(2025, selected_race, session_type)
+        # Use mapped name if available
+        race_lookup = F1_2025_RACE_NAMES.get(selected_race, selected_race)
+        session = load_fastf1_session(2025, race_lookup, session_type)
     
     if session is None:
-        st.error(f"Could not load session: {selected_race}")
+        st.warning(f"Data not available for {selected_race} - {session_type}. The session might not have started yet.")
         return
     
     # TAB 1: LAP ANALYSIS
@@ -1595,19 +1577,20 @@ def render_race_analysis_tab(df):
                     
                     fig.update_layout(title="Lap Time Evolution", xaxis_title="Lap", yaxis_title="Time (s)",
                         height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                     
-                    # Box plot
-                    fig2 = go.Figure()
-                    for driver in selected_drivers:
-                        drv_laps = laps[(laps['Driver'] == driver) & (laps['LapTime'].notna())]
-                        if not drv_laps.empty:
-                            times = drv_laps['LapTime'].dt.total_seconds()
-                            team = drv_laps['Team'].iloc[0] if 'Team' in drv_laps.columns else ''
-                            fig2.add_trace(go.Box(y=times, name=driver, marker_color=TEAM_COLORS.get(team, '#888888'), boxmean=True))
-                    fig2.update_layout(title="Lap Time Distribution", yaxis_title="Time (s)", height=350,
-                        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                    st.plotly_chart(fig2, width='stretch')
+                    # Fastest laps table
+                    st.markdown("**Fastest Laps:**")
+                    fastest_laps = laps.groupby('Driver').apply(
+                        lambda x: x.nsmallest(1, 'LapTime')
+                    ).reset_index(drop=True)
+                    
+                    if not fastest_laps.empty:
+                        display_cols = ['Driver', 'LapNumber', 'LapTime', 'Compound']
+                        available_cols = [c for c in display_cols if c in fastest_laps.columns]
+                        fastest_display = fastest_laps[available_cols].sort_values('LapTime')
+                        fastest_display['LapTime'] = fastest_display['LapTime'].apply(format_f1_time)
+                        st.dataframe(fastest_display, use_container_width=True, hide_index=True)
             else:
                 st.info("No lap data")
         except Exception as e:
@@ -1653,7 +1636,7 @@ def render_race_analysis_tab(df):
                             line=dict(color=TEAM_COLORS.get(team_b, '#00FF00'), width=2)))
                         fig.update_layout(title=f"{drv_a} vs {drv_b}", xaxis_title="Lap", yaxis_title="Time (s)",
                             height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
             st.error(f"Error: {e}")
     
@@ -1676,14 +1659,15 @@ def render_race_analysis_tab(df):
                 
                 for driver in drivers:
                     driver_tyres = tyre_data[tyre_data['Driver'] == driver].sort_values('Stint')
+                    
                     for _, stint in driver_tyres.iterrows():
                         compound = str(stint.get('Compound', 'MEDIUM')).upper()
                         start = int(stint.get('StartLap', 1))
                         end = int(stint.get('EndLap', start + 10))
-                        laps_count = end - start + 1
+                        laps = end - start + 1
                         color = compound_colors.get(compound, '#888888')
                         
-                        fig.add_trace(go.Bar(x=[laps_count], y=[driver], orientation='h', base=start-1,
+                        fig.add_trace(go.Bar(x=[laps], y=[driver], orientation='h', base=start-1,
                             marker_color=color, marker_line_color='#333', marker_line_width=1,
                             showlegend=False, text=compound[0] if compound != 'UNKNOWN' else '?',
                             textposition='inside', textfont=dict(color='black' if compound in ['MEDIUM','HARD'] else 'white', size=10)))
@@ -1693,16 +1677,28 @@ def render_race_analysis_tab(df):
                     height=max(450, len(drivers)*25), barmode='overlay', paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'),
                     yaxis=dict(categoryorder='array', categoryarray=drivers[::-1]))
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
                 
-                c1, c2, c3, c4, c5 = st.columns(5)
-                with c1: st.markdown("🔴 **SOFT**")
-                with c2: st.markdown("🟡 **MEDIUM**")
-                with c3: st.markdown("⚪ **HARD**")
-                with c4: st.markdown("🟢 **INTER**")
-                with c5: st.markdown("🔵 **WET**")
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    st.markdown("**SOFT** (Red)")
+                with col2:
+                    st.markdown("**MEDIUM** (Yellow)")
+                with col3:
+                    st.markdown("**HARD** (White)")
+                with col4:
+                    st.markdown("**INTERMEDIATE** (Green)")
+                with col5:
+                    st.markdown("**WET** (Blue)")
+                
+                # Stint details table
+                with st.expander("View Detailed Stint Data"):
+                    display_tyres = tyre_data[['Driver', 'Stint', 'Compound', 'StartLap', 'EndLap', 'Laps']].copy()
+                    display_tyres['Stint'] = display_tyres['Stint'] + 1
+                    display_tyres = display_tyres.rename(columns={'Stint': 'Stint #', 'StartLap': 'Start', 'EndLap': 'End'})
+                    st.dataframe(display_tyres, use_container_width=True, hide_index=True)
             else:
-                st.info("No tyre data")
+                st.info("Tyre strategy data not available")
         except Exception as e:
             st.error(f"Error: {e}")
     
@@ -1745,15 +1741,38 @@ def render_race_analysis_tab(df):
                         
                         fig.update_layout(title=f"Gap to Leader ({leader_name})", xaxis_title="Lap", yaxis_title="Gap (s)",
                             height=500, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No lap data")
         except Exception as e:
             st.error(f"Error: {e}")
     
-    # TAB 5: 2D TRACK ANIMATION - Real Car Movement
+    # TAB 5: TRACK VISUALIZATION
     with analysis_tabs[4]:
-        st.subheader("2D Track Animation - Live Race Replay")
+        st.subheader("Track Visualization")
+        
+        with st.expander("3D Track Map Analysis", expanded=True):
+            st.markdown("Interactive 3D map colored by speed. Drag to rotate, scroll to zoom.")
+            try:
+                # Get driver list for specific driver highlight
+                if hasattr(session, 'drivers'):
+                    drivers = session.drivers
+                    drivers_list = [session.get_driver(d)["Abbreviation"] for d in drivers]
+                    sel_driver = st.selectbox("Highlight Driver Line", ["Fastest Lap"] + sorted(drivers_list), key="3d_drv_sel")
+                    driver_arg = None if sel_driver == "Fastest Lap" else sel_driver
+                    
+                    if st.button("Generate 3D Map", key="gen_3d_btn"):
+                        with st.spinner("Generating 3D Map..."):
+                            fig_3d = plot_track_3d(session, driver=driver_arg)
+                            if fig_3d:
+                                st.plotly_chart(fig_3d, use_container_width=True)
+                            else:
+                                st.error("Could not generate map (missing telemetry?)")
+            except Exception as e:
+                st.error(f"Error in 3D Map: {e}")
+
+        st.divider()
+        st.subheader("2D Live Race Replay")
         
         try:
             # Speed control
@@ -2135,14 +2154,14 @@ def render_race_analysis_tab(df):
                     text=pit_stops['Driver'], hovertemplate="%{text}<br>Lap: %{x}<br>Time: %{y:.1f}s<extra></extra>"))
                 fig.update_layout(title="Pit Stop Distribution", xaxis_title="Lap", yaxis_title="Time (s)",
                     height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
                 
                 pit_laps = pit_stops.groupby('Lap').size().reset_index(name='Stops')
                 fig2 = go.Figure()
                 fig2.add_trace(go.Bar(x=pit_laps['Lap'], y=pit_laps['Stops'], marker_color='#E10600'))
                 fig2.update_layout(title="Pit Windows", xaxis_title="Lap", yaxis_title="Stops",
                     height=300, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                st.plotly_chart(fig2, width='stretch')
+                st.plotly_chart(fig2, use_container_width=True)
             else:
                 st.info("No pit stop data")
         except Exception as e:
@@ -2177,7 +2196,7 @@ def render_race_analysis_tab(df):
                     
                     # Podium
                     podium = st.columns(3)
-                    medals = ['🥇', '🥈', '🥉']
+                    medals = ['P1', 'P2', 'P3']
                     for i, (_, row) in enumerate(scores_df.head(3).iterrows()):
                         tc = TEAM_COLORS.get(row['Team'], '#666')
                         with podium[i]:
@@ -2186,7 +2205,7 @@ def render_race_analysis_tab(df):
                                 <p style="color:{tc};margin:0;font-weight:bold;">{row['Overall']:.1f}</p></div>""", unsafe_allow_html=True)
                     
                     st.dataframe(scores_df[['Rank','Driver','Team','Pace','Consistency','Race Pace','Overall','Best']], 
-                        width='stretch', hide_index=True)
+                        use_container_width=True, hide_index=True)
                     
                     # Radar chart
                     fig = go.Figure()
@@ -2196,252 +2215,192 @@ def render_race_analysis_tab(df):
                             line=dict(color=TEAM_COLORS.get(row['Team'], '#888888'))))
                     fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,100]), bgcolor='rgba(0,0,0,0)'),
                         height=450, paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No lap data")
         except Exception as e:
             st.error(f"Error: {e}")
 
 
+    # TAB 10: TELEMETRY COMPARE
+    with analysis_tabs[9]:
+        st.subheader("Driver Telemetry Comparison")
+        try:
+            laps = session.laps
+            if laps is not None and not laps.empty:
+                drivers_list = sorted(laps['Driver'].unique().tolist())
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    drv1 = st.selectbox("Driver 1", drivers_list, key="tel_d1")
+                with col2:
+                    drv2 = st.selectbox("Driver 2", [d for d in drivers_list if d != drv1], key="tel_d2")
+                with col3:
+                    lap_mode = st.radio("Lap Selection", ["Fastest Lap", "Specific Lap"], horizontal=True, key="tel_mode")
+                
+                selected_lap = None
+                if lap_mode == "Specific Lap":
+                    max_laps = int(laps['LapNumber'].max())
+                    selected_lap = st.slider("Select Lap", 1, max_laps, 1, key="tel_lap_sel")
+                
+                if st.button("Compare Telemetry", type="primary", key="tel_comp_btn"):
+                    with st.spinner("Generating detailed telemetry..."):
+                        fig = plot_telemetry_comparison(session, drv1, drv2, selected_lap)
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Also show gear shift map
+                            st.subheader("Gear Shift Analysis")
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                fig_g1 = plot_gear_shift_trace(session, drv1)
+                                if fig_g1: st.plotly_chart(fig_g1, use_container_width=True)
+                            with c2:
+                                fig_g2 = plot_gear_shift_trace(session, drv2)
+                                if fig_g2: st.plotly_chart(fig_g2, use_container_width=True)
+                        else:
+                            st.error("Could not generate telemetry plot")
+            else:
+                st.info("No session data")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+
 def render_prediction_tab(df, total_points_combined=None):
-    """Tab 6: AI Race Predictions - Only for Abu Dhabi Grand Prix (final race)."""
-    st.header("AI Race Predictor - Abu Dhabi Grand Prix")
+    """AI Race Predictions tab content."""
+    st.header("AI Race Predictor")
     
     if df is None or df.empty:
         st.error("No data available")
         return
     
-    st.info("**Season Finale:** Abu Dhabi Grand Prix is the only remaining race of 2025!")
+    # Load model
+    model = load_trained_model()
     
-    # Get drivers (exclude Jack Doohan who is no longer racing)
-    drivers = sorted([d for d in df['Driver'].unique().tolist() if d != 'Jack Doohan'])
-    
+    if model is None:
+        st.warning("Model not trained. Please train the model first (see documentation).")
+        return
+
+    # Get next race details from schedule
+    try:
+        schedule = fastf1.get_event_schedule(2025)
+        if schedule['EventDate'].dt.tz is None:
+             schedule['EventDate'] = schedule['EventDate'].dt.tz_localize('UTC')
+        
+        now = pd.Timestamp.now(tz='UTC')
+        upcoming = schedule[schedule['EventDate'] >= (now - timedelta(days=3))].head(1)
+        
+        if not upcoming.empty:
+            next_event = upcoming.iloc[0]
+            race_name = next_event['EventName']
+            st.info(f"Predicting for: {race_name}")
+        else:
+            race_name = "Upcoming Race"
+            st.info("Predicting for next available race.")
+            
+    except Exception:
+        race_name = "Next Race"
+
     # Prediction tabs
-    pred_tabs = st.tabs(["Race Prediction", "Full Grid Prediction", "Championship Outlook"])
+    pred_tabs = st.tabs(["Full Grid Prediction", "Model Insights"])
     
     with pred_tabs[0]:
-        st.subheader("Individual Driver Prediction - Abu Dhabi")
+        st.subheader(f"Predicted Results - {race_name}")
         
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            selected_driver = st.selectbox("Select Driver", drivers, key="pred_driver_abu")
-            predict_btn = st.button("Generate Prediction", type="primary", key="pred_btn_abu")
-        
-        with col2:
-            if predict_btn and selected_driver:
-                driver_df = df[df['Driver'] == selected_driver]
+        if st.button("Generate Predictions", type="primary", key="gen_pred_btn"):
+            with st.spinner("Running Random Forest Regressor..."):
+                # Prepare input data
+                drivers = sorted(df['Driver'].unique().tolist())
+                driver_stats = calculate_driver_stats(df)
                 
-                if len(driver_df) < 2:
-                    st.warning("Not enough data for prediction")
-                else:
-                    # Calculate stats
-                    avg_pos = driver_df['Position'].mean()
-                    std_pos = driver_df['Position'].std() if len(driver_df) > 1 else 3
-                    best_pos = driver_df['Position'].min()
-                    wins = len(driver_df[driver_df['Position'] == 1])
-                    podiums = len(driver_df[driver_df['Position'] <= 3])
+                predictions = []
+                
+                # Get encoders if available (would need to load them, but assuming prepare_features handles it or we recreate basic encoding for display)
+                # Ideally we use the pipeline from model.py. 
+                # For now, we'll construct the feature DF and assume encoders are handled or we pass raw if pipeline supports it.
+                # Actually, prepare_features(train_mode=False) loads encoders.
+                
+                # Create a dataframe for all drivers for the next race
+                pred_rows = []
+                for driver in drivers:
+                    driver_data = df[df['Driver'] == driver]
+                    if driver_data.empty:
+                        continue
+                        
+                    team = driver_data['Team'].iloc[0]
                     
-                    # Get total points from combined
-                    if total_points_combined and selected_driver in total_points_combined:
-                        total_pts = total_points_combined[selected_driver]
+                    # Estimate grid position from season average
+                    if driver_stats is not None and driver in driver_stats.index:
+                        # avg_grid not in driver_stats by default, let's calculate it on the fly
+                        avg_grid = driver_data['Starting Grid'].mean() if 'Starting Grid' in driver_data.columns else 10
                     else:
-                        total_pts = driver_df['Points'].sum()
-                    
-                    avg_grid = driver_df['Starting Grid'].mean() if 'Starting Grid' in driver_df.columns else avg_pos
-                    
-                    # Predictions
-                    pred_quali = max(1, int(round(avg_grid * 0.95)))
-                    pred_race = max(1, int(round(avg_pos)))
-                    confidence = max(50, min(95, 100 - std_pos * 8))
-                    podium_chance = max(5, min(95, (4 - avg_pos) * 25)) if avg_pos <= 6 else max(5, 30 - avg_pos * 2)
-                    
-                    team = driver_df['Team'].iloc[0]
-                    team_color = TEAM_COLORS.get(team, '#666666')
-                    
-                    st.markdown(f"### {selected_driver} - {team}")
-                    
-                    col_a, col_b, col_c, col_d = st.columns(4)
-                    with col_a:
-                        st.metric("Quali Prediction", f"P{pred_quali}")
-                    with col_b:
-                        st.metric("Race Prediction", f"P{pred_race}")
-                    with col_c:
-                        st.metric("Podium Chance", f"{podium_chance:.0f}%")
-                    with col_d:
-                        st.metric("Confidence", f"{confidence:.0f}%")
-                    
-                    st.divider()
-                    
-                    # Season stats
-                    st.markdown("**2025 Season Stats**")
-                    stat_cols = st.columns(6)
-                    races = len(driver_df)
-                    avg_pts = total_pts / races if races > 0 else 0
-                    
-                    with stat_cols[0]:
-                        st.metric("Races", races)
-                    with stat_cols[1]:
-                        st.metric("Wins", wins)
-                    with stat_cols[2]:
-                        st.metric("Podiums", podiums)
-                    with stat_cols[3]:
-                        st.metric("Best", f"P{int(best_pos)}")
-                    with stat_cols[4]:
-                        st.metric("Avg Pts/Race", f"{avg_pts:.1f}")
-                    with stat_cols[5]:
-                        st.metric("Total Points", int(total_pts))
-    
-    with pred_tabs[1]:
-        st.subheader("Full Race Prediction - Abu Dhabi")
-        
-        if st.button("Predict Full Grid", type="primary", key="pred_btn_full"):
-            # Calculate predictions for all drivers
-            predictions = []
-            
-            for driver in drivers:
-                driver_df = df[df['Driver'] == driver]
-                if len(driver_df) >= 1:
-                    avg_pos = driver_df['Position'].mean()
-                    std_pos = driver_df['Position'].std() if len(driver_df) > 1 else 3
-                    team = driver_df['Team'].iloc[0]
-                    
-                    if total_points_combined and driver in total_points_combined:
-                        pts = total_points_combined[driver]
-                    else:
-                        pts = driver_df['Points'].sum()
-                    
-                    predictions.append({
+                        avg_grid = 10
+                        
+                    pred_rows.append({
                         'Driver': driver,
                         'Team': team,
-                        'Predicted': avg_pos,
-                        'Total_Points': pts,
-                        'Confidence': max(50, min(95, 100 - std_pos * 8))
+                        'Starting Grid': round(avg_grid),
+                        'Track': race_name,
+                        'Finished': True # Dummy for feature prep
                     })
-            
-            pred_df = pd.DataFrame(predictions).sort_values('Predicted')
-            pred_df['Position'] = range(1, len(pred_df) + 1)
-            
-            points_map = {1: 25, 2: 18, 3: 15, 4: 12, 5: 10, 6: 8, 7: 6, 8: 4, 9: 2, 10: 1}
-            pred_df['Race_Points'] = pred_df['Position'].map(points_map).fillna(0)
-            
-            # Podium
-            st.markdown("**Predicted Podium**")
-            podium_cols = st.columns(3)
-            medals = ['🥇', '🥈', '🥉']
-            
-            for i, (_, row) in enumerate(pred_df.head(3).iterrows()):
-                team_color = TEAM_COLORS.get(row['Team'], '#666666')
-                with podium_cols[i]:
-                    st.markdown(f"""
-                    <div style="text-align: center; padding: 15px; background: linear-gradient(135deg, {team_color}55 0%, {team_color}22 100%); border-radius: 10px; border: 2px solid {team_color};">
-                        <h2 style="margin: 0;">{medals[i]}</h2>
-                        <h4 style="color: white; margin: 5px 0;">{row['Driver']}</h4>
-                        <p style="color: #888; margin: 0; font-size: 0.9em;">{row['Team']}</p>
-                        <p style="color: #FFD700; margin: 5px 0;">+{int(row['Race_Points'])} pts</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            st.divider()
-            
-            # Full results
-            st.markdown("**Full Predicted Results**")
-            display_df = pred_df[['Position', 'Driver', 'Team', 'Race_Points', 'Confidence']].copy()
-            display_df.columns = ['Pos', 'Driver', 'Team', 'Pts', 'Conf %']
-            st.dataframe(display_df, width='stretch', hide_index=True)
-    
-    with pred_tabs[2]:
-        st.subheader("Championship Outlook After Abu Dhabi")
-        
-        # Get current standings with combined points
-        standings = []
-        for driver in drivers:
-            driver_df = df[df['Driver'] == driver]
-            if len(driver_df) >= 1:
-                if total_points_combined and driver in total_points_combined:
-                    pts = total_points_combined[driver]
-                else:
-                    pts = driver_df['Points'].sum()
                 
-                team = driver_df['Team'].iloc[0]
-                wins = len(driver_df[driver_df['Position'] == 1])
+                pred_df = pd.DataFrame(pred_rows)
                 
-                standings.append({
-                    'Driver': driver,
-                    'Team': team,
-                    'Points': pts,
-                    'Wins': wins
-                })
+                try:
+                    # Transform features
+                    X_pred, _, _ = prepare_features(pred_df, train_mode=False)
+                    
+                    # Predict
+                    y_pred = model.predict(X_pred)
+                    
+                    pred_df['Predicted_Position'] = y_pred
+                    pred_df = pred_df.sort_values('Predicted_Position')
+                    pred_df['Rank'] = range(1, len(pred_df) + 1)
+                    
+                    # Display
+                    st.dataframe(pred_df[['Rank', 'Driver', 'Team', 'Starting Grid', 'Predicted_Position']], 
+                                 use_container_width=True, hide_index=True)
+                    
+                    # Winner
+                    winner = pred_df.iloc[0]
+                    st.success(f"Predicted Winner: {winner['Driver']} ({winner['Team']})")
+                    
+                except Exception as e:
+                    st.error(f"Prediction failed: {e}")
+                    st.caption("Ensure categorical encoders (Driver, Team, Track) are generated via training.")
+
+    with pred_tabs[1]:
+        st.subheader("Prediction Factors")
         
-        standings_df = pd.DataFrame(standings).sort_values('Points', ascending=False)
-        standings_df['Position'] = range(1, len(standings_df) + 1)
-        
-        st.markdown("**Current Championship Standings (23/24 Races)**")
-        
-        # Top 5 visualization
-        top_5 = standings_df.head(5)
-        
-        fig = go.Figure()
-        for _, row in top_5.iterrows():
-            team_color = TEAM_COLORS.get(row['Team'], '#666666')
-            fig.add_trace(go.Bar(
-                x=[row['Driver']],
-                y=[row['Points']],
-                marker_color=team_color,
-                text=f"{int(row['Points'])} pts",
-                textposition='outside',
-                name=row['Driver']
-            ))
-        
-        fig.update_layout(
-            title="Top 5 Drivers - Current Points",
-            height=400,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            showlegend=False
-        )
-        st.plotly_chart(fig, width='stretch')
-        
-        # Full standings table
-        display_standings = standings_df[['Position', 'Driver', 'Team', 'Points', 'Wins']].head(20)
-        display_standings.columns = ['Pos', 'Driver', 'Team', 'Points', 'Wins']
-        st.dataframe(display_standings, width='stretch', hide_index=True)
-        
-        # Points gap analysis
-        st.markdown("**Points Gap to Leader**")
-        leader_pts = standings_df.iloc[0]['Points']
-        gaps = []
-        for _, row in standings_df.head(10).iterrows():
-            gaps.append({
-                'Driver': row['Driver'],
-                'Gap': leader_pts - row['Points']
-            })
-        
-        gap_df = pd.DataFrame(gaps)
-        fig2 = go.Figure()
-        fig2.add_trace(go.Bar(
-            x=gap_df['Driver'],
-            y=gap_df['Gap'],
-            marker_color=['#FFD700'] + ['#888888'] * (len(gap_df) - 1),
-            text=[f"-{int(g)}" if g > 0 else "Leader" for g in gap_df['Gap']],
-            textposition='outside'
-        ))
-        fig2.update_layout(
-            title="Points Behind Leader",
-            height=350,
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            xaxis=dict(tickangle=45)
-        )
-        st.plotly_chart(fig2, width='stretch')
+        if hasattr(model, 'feature_importances_'):
+            # Hardcoded feature names based on features.py
+            feature_names = ['Starting Grid', 'Driver', 'Team', 'Track']
+            
+            if len(model.feature_importances_) == len(feature_names):
+                importances = pd.DataFrame({
+                    'Feature': feature_names,
+                    'Importance': model.feature_importances_
+                }).sort_values('Importance', ascending=False)
+                
+                fig = px.bar(importances, x='Importance', y='Feature', orientation='h',
+                             title="Model Feature Importance")
+                fig.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.markdown("""
+                **Key Factors:**
+                * **Starting Grid:** Historical data shows qualifying performance is the strongest predictor.
+                * **Driver/Team:** Adjusts for car performance relative to the field.
+                * **Track:** Accounts for circuit-specific performance characteristics.
+                """)
+            else:
+                st.info("Feature importance details unavailable.")
 
 
 def render_telemetry_tab(df):
-    """Tab 6: Engineer-Style Telemetry Display."""
+    """Live Telemetry Monitor tab content."""
     st.header("Live Telemetry Monitor")
-    st.markdown("*Engineer-style telemetry display with detailed car data*")
+    st.markdown("Engineer-style telemetry display with detailed car data")
     
     # Race and driver selection
     col1, col2, col3 = st.columns(3)
@@ -2520,7 +2479,7 @@ def render_telemetry_tab(df):
             team_color = TEAM_COLORS.get(team, '#E10600')
             
             # Header with lap info
-            lap_time = fastest_lap.get('LapTime', 'N/A')
+            lap_time = format_f1_time(fastest_lap.get('LapTime', pd.NaT))
             lap_number = fastest_lap.get('LapNumber', 'N/A')
             compound = fastest_lap.get('Compound', 'N/A')
             
@@ -2564,19 +2523,19 @@ def render_telemetry_tab(df):
             
             with col1:
                 fig = create_gauge(latest_speed, max_speed, "SPEED (km/h)", team_color)
-                st.plotly_chart(fig, width='stretch', key="speed_gauge")
+                st.plotly_chart(fig, use_container_width=True, key="speed_gauge")
             
             with col2:
                 fig = create_gauge(latest_throttle, 100, "THROTTLE (%)", "#00FF00")
-                st.plotly_chart(fig, width='stretch', key="throttle_gauge")
+                st.plotly_chart(fig, use_container_width=True, key="throttle_gauge")
             
             with col3:
                 fig = create_gauge(latest_brake, 100, "BRAKE (%)", "#FF0000")
-                st.plotly_chart(fig, width='stretch', key="brake_gauge")
+                st.plotly_chart(fig, use_container_width=True, key="brake_gauge")
             
             with col4:
                 fig = create_gauge(latest_rpm, max_rpm, "RPM", "#FFD700")
-                st.plotly_chart(fig, width='stretch', key="rpm_gauge")
+                st.plotly_chart(fig, use_container_width=True, key="rpm_gauge")
             
             st.divider()
             
@@ -2603,7 +2562,7 @@ def render_telemetry_tab(df):
                 plot_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='white')
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
             
             # Throttle/Brake trace
             st.subheader("Throttle & Brake Trace")
@@ -2639,7 +2598,7 @@ def render_telemetry_tab(df):
                 font=dict(color='white'),
                 legend=dict(orientation='h', yanchor='bottom', y=1.02)
             )
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
             
             # Gear and DRS
             col1, col2 = st.columns(2)
@@ -2663,7 +2622,7 @@ def render_telemetry_tab(df):
                         plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='white')
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
             
             with col2:
                 st.subheader("DRS Status")
@@ -2687,7 +2646,7 @@ def render_telemetry_tab(df):
                         plot_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='white')
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
             
             # Track Map with Speed
             st.subheader("Track Map - Speed Visualization")
@@ -2718,13 +2677,327 @@ def render_telemetry_tab(df):
                     yaxis=dict(visible=False, scaleanchor='x'),
                     showlegend=False
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Track position data not available for this lap")
             
         except Exception as e:
             st.error(f"Error loading telemetry: {e}")
             logger.error(f"Telemetry error: {e}", exc_info=True)
+
+
+def render_live_timing_tab():
+    """Live Timing Session tab content."""
+    st.header("Live Timing Session") # Removed emoji
+    
+    # Current time (UTC)
+    now = pd.Timestamp.now(tz='UTC')
+    st.markdown(f"**Current System Time (UTC):** {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Get schedule for 2025
+    try:
+        schedule = fastf1.get_event_schedule(2025)
+        
+        # Ensure schedule dates are timezone-aware UTC for comparison
+        if schedule['EventDate'].dt.tz is None:
+             schedule['EventDate'] = schedule['EventDate'].dt.tz_localize('UTC')
+
+        # Find next or current event (filter for events happening today or in future)
+        # We look for events where the last session is in the future or today
+        upcoming = schedule[schedule['EventDate'] >= (now - timedelta(days=3))].head(1)
+        
+        if not upcoming.empty:
+            next_event = upcoming.iloc[0]
+            st.subheader(f"Target Event: {next_event['EventName']}")
+            st.write(f"Location: {next_event['Location']}")
+            
+            # Display sessions
+            sessions = ['Session1', 'Session2', 'Session3', 'Session4', 'Session5']
+            
+            schedule_data = []
+            active_session_name = None
+            
+            for s in sessions:
+                s_date_col = f'{s}Date'
+                s_name_col = s
+                
+                if s_date_col in next_event and s_name_col in next_event:
+                    s_date = next_event[s_date_col]
+                    s_name = next_event[s_name_col]
+                    
+                    if pd.notna(s_date):
+                        # Ensure s_date is timezone aware for comparison
+                        if isinstance(s_date, pd.Timestamp) and s_date.tz is None:
+                            s_date = s_date.tz_localize('UTC')
+
+                        status = "Upcoming"
+                        # Check if currently active (assuming 2h duration)
+                        if isinstance(s_date, pd.Timestamp):
+                            s_end = s_date + timedelta(hours=2)
+                            if s_date <= now <= s_end:
+                                status = "LIVE" # Removed emoji
+                            elif now > s_end:
+                                status = "Completed"
+                        
+                        schedule_data.append({
+                            'Session': s_name, 
+                            'Time': s_date.strftime('%Y-%m-%d %H:%M') if pd.notna(s_date) else 'TBD',
+                            'Status': status
+                        })
+            
+            st.table(pd.DataFrame(schedule_data))
+            
+            # Race Week Notification - Removed emojis
+            event_date = next_event['EventDate']
+            if isinstance(event_date, pd.Timestamp):
+                if event_date.tz is None:
+                    event_date = event_date.tz_localize('UTC')
+                
+                days_diff = (event_date - now).days
+                if -1 <= days_diff <= 7:
+                    st.markdown(f"""
+                    <div style="background-color: #E10600; color: white; padding: 10px; border-radius: 5px; margin-bottom: 20px; overflow: hidden; white-space: nowrap;">
+                        <div style="display: inline-block; animation: marquee 15s linear infinite; font-weight: bold; font-size: 1.2em;">
+                            IT'S RACE WEEK! {next_event['EventName'].upper()} IS COMING UP! GET READY FOR THE ACTION!
+                        </div>
+                    </div>
+                    <style>
+                    @keyframes marquee {{
+                        0% {{ transform: translateX(100%); }}
+                        100% {{ transform: translateX(-100%); }}
+                    }}
+                    </style>
+                    """, unsafe_allow_html=True)
+            
+            # Connection controls
+            st.divider()
+            st.markdown("### Live Data Connection")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                default_idx = 0
+                if active_session_name:
+                    try:
+                        default_idx = [s['Session'] for s in schedule_data].index(active_session_name)
+                    except:
+                        pass
+                session_sel = st.selectbox("Select Session to Monitor", [s['Session'] for s in schedule_data], index=default_idx)
+            with col2:
+                auto_refresh = st.checkbox("Auto-refresh (Simulated)", value=False)
+                if auto_refresh:
+                    st.caption("Page will refresh interaction to update data")
+                else:
+                    if st.button("Refresh Now"): # Removed emoji
+                        pass  # Just triggers rerun
+            
+            # Automatic connection if session is selected
+            if session_sel:
+                with st.spinner(f"Connecting to {next_event['EventName']} - {session_sel}..."):
+                    try:
+                        # Attempt to load
+                        setup_fastf1_cache()
+                        session = fastf1.get_session(2025, next_event['EventName'], session_sel)
+                        
+                        # For live sessions, we might get partial data
+                        # We suppress errors for live data fetch
+                        try:
+                            session.load(telemetry=False, weather=True, messages=True)
+                        except Exception as e:
+                            st.warning(f"Full load failed (expected if live): {e}")
+                            # Try minimal load
+                            pass
+                        
+                        st.success(f"Connected to {session.name}")
+                        
+                        # Dashboard
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1:
+                            st.metric("Session Status", "Connected")
+                        with c2:
+                            if hasattr(session, 'weather_data') and session.weather_data is not None and not session.weather_data.empty:
+                                temp = session.weather_data['TrackTemp'].iloc[-1]
+                                st.metric("Track Temp", f"{temp:.1f}°C")
+                            else:
+                                st.metric("Track Temp", "N/A")
+                        with c3:
+                            if hasattr(session, 'drivers'):
+                                st.metric("Drivers", len(session.drivers))
+                            else:
+                                st.metric("Drivers", "0")
+                        with c4:
+                            st.metric("Last Update", now.strftime('%H:%M:%S'))
+                            
+                        st.divider()
+                        
+                        # Leaderboard
+                        st.subheader("Live Leaderboard")
+                        if hasattr(session, 'results') and session.results is not None and not session.results.empty:
+                            cols = ['Position', 'Abbreviation', 'Time', 'Status', 'Points']
+                            valid_cols = [c for c in cols if c in session.results.columns]
+                            st.dataframe(session.results[valid_cols], hide_index=True, use_container_width=True)
+                        else:
+                            st.info("Waiting for timing data... (Results not yet available)")
+                        
+                        # Latest Messages
+                        st.subheader("Race Control Messages")
+                        messages = get_track_status(session)
+                        if not messages.empty:
+                            st.dataframe(messages.tail(10).sort_values('Time', ascending=False), hide_index=True, use_container_width=True)
+                        else:
+                            st.info("No messages received.")
+                            
+                    except Exception as e:
+                        st.error(f"Connection failed: {e}")
+                        st.info("Note: FastF1 requires the session to be started to fetch data.")
+        else:
+            st.info("No upcoming events found for 2025 (or schedule API unavailable).")
+            
+    except Exception as e:
+        st.error(f"Error loading schedule: {e}")
+
+
+def render_qualifying_tab():
+    """Qualifying Analysis tab content."""
+    st.header("Qualifying Deep Dive")
+    st.markdown("Analyze qualifying performance, lap evolution, and sector dominance.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        q_race = st.selectbox("Select Race for Qualifying Analysis", F1_2025_COMPLETED_RACES, key="q_race")
+    
+    if st.button("Analyze Qualifying", type="primary"):
+        with st.spinner(f"Loading {q_race} Qualifying Data..."):
+            setup_fastf1_cache()
+            session = load_fastf1_session(2025, q_race, "Qualifying")
+            
+            if session:
+                st.divider()
+                
+                # 1. Evolution Plot
+                st.subheader("Lap Time Evolution")
+                fig_evo = plot_qualifying_evolution(session)
+                if fig_evo: st.plotly_chart(fig_evo, use_container_width=True)
+                else: st.info("Evolution data unavailable")
+                
+                col1, col2 = st.columns(2)
+                
+                # 2. Gap to Pole
+                with col1:
+                    st.subheader("Gap to Pole")
+                    fig_gap = plot_qualifying_gap(session)
+                    if fig_gap: st.plotly_chart(fig_gap, use_container_width=True)
+                    
+                # 3. Sector Dominance
+                with col2:
+                    st.subheader("Sector Dominance")
+                    fig_sec = plot_sector_dominance(session)
+                    if fig_sec: st.plotly_chart(fig_sec, use_container_width=True)
+            else:
+                st.error("Could not load session")
+
+
+def render_teammate_battle_tab(df):
+    """Teammate Battle tab content."""
+    st.header("Teammate Head-to-Head Wars")
+    st.markdown("Comparing performance between teammates across the season.")
+    
+    if df is None or df.empty:
+        st.error("No season data available")
+        return
+        
+    comparison_df = calculate_teammate_comparison(df)
+    
+    if comparison_df.empty:
+        st.warning("Not enough data to generate comparisons.")
+        return
+        
+    # Team Selector
+    teams = sorted(comparison_df['Team'].unique())
+    selected_team = st.selectbox("Select Team to Compare", teams, key="tm_comp_team")
+    
+    if selected_team:
+        team_data_row = comparison_df[comparison_df['Team'] == selected_team].iloc[0] # Use a different var name
+        
+        d1 = team_data_row['Driver 1']
+        d2 = team_data_row['Driver 2']
+        
+        st.divider()
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col1:
+            st.markdown(f"<h2 style='text-align: center; color: {TEAM_COLORS.get(selected_team, 'white')}'>{d1}</h2>", unsafe_allow_html=True)
+            prof1 = DRIVER_PROFILES.get(d1, {})
+            if prof1.get('image_url'):
+                st.image(prof1['image_url'], use_container_width=True)
+                
+        with col2:
+            st.markdown("<h1 style='text-align: center;'>VS</h1>", unsafe_allow_html=True)
+            
+            comp_metrics = [
+                ("Races Together", team_data_row['Races Together'], team_data_row['Races Together']),
+                ("Race Head-to-Head", team_data_row['D1 Race Wins'], team_data_row['D2 Race Wins']),
+                ("Quali Head-to-Head", team_data_row['Quali H2H'].split(' - ')[0], team_data_row['Quali H2H'].split(' - ')[1]),
+                ("Total Points", int(team_data_row['Pts 1']), int(team_data_row['Pts 2']))
+            ]
+            
+            for label, v1, v2 in comp_metrics:
+                c_a, c_b, c_c = st.columns([1, 2, 1])
+                with c_a: st.markdown(f"<h3 style='text-align: right;'>{v1}</h3>", unsafe_allow_html=True)
+                with c_b: st.markdown(f"<p style='text-align: center; color: #888;'>{label}</p>", unsafe_allow_html=True)
+                with c_c: st.markdown(f"<h3 style='text-align: left;'>{v2}</h3>", unsafe_allow_html=True)
+                st.divider()
+
+        with col3:
+            st.markdown(f"<h2 style='text-align: center; color: {TEAM_COLORS.get(selected_team, 'white')}'>{d2}</h2>", unsafe_allow_html=True)
+            prof2 = DRIVER_PROFILES.get(d2, {})
+            if prof2.get('image_url'):
+                st.image(prof2['image_url'], use_container_width=True)
+                
+        with st.expander("View All Teammate Comparisons"):
+            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+
+
+def render_official_plots_tab():
+    """Official F1 Style Plots tab content."""
+    st.header("Official F1 Style Plots")
+    st.markdown("High-quality static visualizations using FastF1's matplotlib integration.")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        plot_race = st.selectbox("Select Race", F1_2025_COMPLETED_RACES, key="plot_race")
+    with col2:
+        plot_session = st.selectbox("Session Type", ["Race", "Qualifying"], key="plot_session")
+    with col3:
+        st.markdown("Driver specific plots:")
+        plot_driver = st.text_input("Driver Code (e.g., VER, HAM)", value="VER", key="plot_driver")
+        
+    if st.button("Generate Plots", type="primary"):
+        with st.spinner("Generating plots..."):
+            setup_fastf1_cache()
+            session = load_fastf1_session(2025, plot_race, plot_session)
+            if session:
+                st.subheader("Circuit with Corners")
+                fig1 = plot_circuit_with_corners(session)
+                if fig1: st.pyplot(fig1)
+                
+                st.subheader("Team Pace Comparison")
+                fig2 = plot_team_pace_comparison(session)
+                if fig2: st.pyplot(fig2)
+                
+                st.subheader("Tyre Strategy Summary")
+                fig3 = plot_tyre_strategy_summary(session)
+                if fig3: st.pyplot(fig3)
+                
+                st.subheader(f"Speed Visualization ({plot_driver})")
+                fig4 = plot_speed_on_track(session, plot_driver)
+                if fig4: st.pyplot(fig4)
+                
+                st.subheader(f"Gear Shift Visualization ({plot_driver})")
+                fig5 = plot_gear_shift_on_track(session, plot_driver)
+                if fig5: st.pyplot(fig5)
+            else:
+                st.error("Could not load session.")
 
 
 def main():
@@ -2756,60 +3029,106 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://cdn-icons-png.flaticon.com/512/2418/2418779.png", width=80)
+        # Removed emoji from image source
+        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/F1.svg/512px-F1.svg.png", width=80) 
         st.title("F1 2025")
         st.markdown("---")
         
         if df is not None:
             st.markdown(f"**Races:** {len(F1_2025_COMPLETED_RACES)}/24")
-            st.markdown(f"**Circuits Raced:** {df['Track'].nunique()}")
-            st.markdown(f"**Total Race Laps:** {total_laps_all:,}")
             st.markdown(f"**Total Points:** {int(total_all_points):,}")
-            st.markdown(f"**Active Drivers:** {df['Driver'].nunique()}")
-            st.markdown(f"**Teams:** {df['Team'].nunique()}")
-        
-        st.markdown("---")
-        st.markdown("**Race Replay**")
-        st.markdown("Go to **Race Analysis** tab")
-        st.markdown("Select 2D Track Animation")
-        st.markdown("for live position replay")
         
         st.markdown("---")
         st.caption("Created by **Maxvy**")
-    
-    # Main tabs - expanded with new analysis features
-    tabs = st.tabs([
-        "Overview",
-        "Drivers", 
-        "Teams",
-        "Race Details",
-        "Race Analysis",
-        "AI Predictor",
-        "Telemetry"
+
+    # Main Navigation (Grouped Tabs) - Removed emojis
+    main_tabs = st.tabs([
+        "Home",
+        "Season Stats", 
+        "Race Center",
+        "Analysis",
+        "Live"
     ])
     
-    with tabs[0]:
-        render_overview_tab(df, total_points_combined)
+    # 1. Home
+    with main_tabs[0]:
+        render_home_tab()
     
-    with tabs[1]:
-        render_drivers_tab(df, total_points_combined)
-    
-    with tabs[2]:
-        render_teams_tab(df)
-    
-    with tabs[3]:
-        render_race_detail_tab(df)
-    
-    with tabs[4]:
-        render_race_analysis_tab(df)
-    
-    with tabs[5]:
-        render_prediction_tab(df, total_points_combined)
-    
-    with tabs[6]:
-        render_telemetry_tab(df)
+    # 2. Season Stats
+    with main_tabs[1]:
+        st.subheader("Season Statistics")
+        season_subtabs = st.tabs(["Overview", "Drivers", "Constructors"])
+        
+        with season_subtabs[0]:
+            render_overview_tab(df, total_points_combined)
+        with season_subtabs[1]:
+            render_drivers_tab(df, total_points_combined)
+        with season_subtabs[2]:
+            render_teams_tab(df)
+            
+    # 3. Race Center
+    with main_tabs[2]:
+        st.subheader("Race Weekend Center")
+        race_subtabs = st.tabs([
+            "Weekend Details", 
+            "Race Analysis", 
+            "Qualifying", 
+            "Telemetry", 
+            "Official Plots",
+            "Export Data" # Renamed for clarity and no emoji
+        ])
+        
+        with race_subtabs[0]:
+            render_race_detail_tab(df)
+        with race_subtabs[1]:
+            render_race_analysis_tab(df)
+        with race_subtabs[2]:
+            render_qualifying_tab()
+        with race_subtabs[3]:
+            render_telemetry_tab(df)
+        with race_subtabs[4]:
+            render_official_plots_tab()
+        with race_subtabs[5]:
+            # Data Export Logic Inline
+            st.subheader("Data Export")
+            st.markdown("Export session data to CSV for external analysis.")
+            c1, c2 = st.columns(2)
+            with c1:
+                ex_race = st.selectbox("Select Race", F1_2025_COMPLETED_RACES, key="export_race")
+            with c2:
+                ex_session = st.selectbox("Session Type", ["Race", "Qualifying", "Sprint"], key="export_session")
+                
+            if st.button("Prepare Export", type="primary"):
+                with st.spinner("Processing data..."):
+                    setup_fastf1_cache()
+                    session = load_fastf1_session(2025, ex_race, ex_session)
+                    if session:
+                        exports = export_session_to_csv(session)
+                        cols = st.columns(3)
+                        if 'laps' in exports:
+                            cols[0].download_button("Download Laps", exports['laps'], f"{ex_race}_laps.csv", "text/csv")
+                        if 'results' in exports:
+                            cols[1].download_button("Download Results", exports['results'], f"{ex_race}_results.csv", "text/csv")
+                        if 'weather' in exports:
+                            cols[2].download_button("Download Weather", exports['weather'], f"{ex_race}_weather.csv", "text/csv")
+                        st.success("Data ready for download!")
+                    else:
+                        st.error("Could not load session.")
+
+    # 4. Analysis
+    with main_tabs[3]:
+        st.subheader("Advanced Analysis")
+        analysis_subtabs = st.tabs(["Teammate Battle", "AI Predictions"])
+        
+        with analysis_subtabs[0]:
+            render_teammate_battle_tab(df)
+        with analysis_subtabs[1]:
+            render_prediction_tab(df, total_points_combined)
+            
+    # 5. Live
+    with main_tabs[4]:
+        render_live_timing_tab()
 
 
 if __name__ == "__main__":
     main()
-

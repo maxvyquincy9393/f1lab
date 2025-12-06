@@ -61,10 +61,20 @@ def prepare_features(
     logger.info(f"Preparing features (train_mode={train_mode})...")
     
     try:
+        # Core feature/target definitions used throughout the function
+        features = ['Starting Grid', 'Driver', 'Team', 'Track']
+        target = 'Position'
+        
+        def _empty_result() -> Tuple[pd.DataFrame, Optional[pd.Series], Dict[str, LabelEncoder]]:
+            """Return consistent empty outputs when no usable data is present."""
+            X_empty = pd.DataFrame(columns=features)
+            y_empty = pd.Series(name=target, dtype='float64') if train_mode else None
+            return X_empty, y_empty, {}
+        
         # Validate input
         if df is None or df.empty:
-            logger.error("Cannot prepare features from empty DataFrame")
-            raise ValueError("DataFrame is None or empty")
+            logger.warning("Received empty DataFrame; returning empty features without error")
+            return _empty_result()
         
         # Filter to finished races in training mode
         if train_mode:
@@ -74,12 +84,8 @@ def prepare_features(
             df = df[df['Finished'] == True].copy()
             logger.info(f"Filtered to {len(df)} finished races")
             if df.empty:
-                logger.error("No finished races found in data")
-                raise ValueError("No finished races in data")
-        
-        # Define features and target
-        features = ['Starting Grid', 'Driver', 'Team', 'Track']
-        target = 'Position'
+                logger.warning("No finished races found; returning empty features")
+                return _empty_result()
         
         # Validate required columns exist
         missing_features = [f for f in features if f not in df.columns]

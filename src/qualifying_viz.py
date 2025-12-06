@@ -1,280 +1,174 @@
-"""
-Qualifying Visualization Module.
-
-Provides comprehensive qualifying analysis and visualization functions
-with proper spacing and team color integration.
-
-Author: F1 Analytics Team
-Version: 2.0.0
-"""
-
-import logging
-import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
-from typing import Optional, Dict, List
+import pandas as pd
+import numpy as np
+import logging
 
-try:
-    from config import TEAM_COLORS, get_team_color
-except ImportError:
-    from src.config import TEAM_COLORS, get_team_color
+logger = logging.getLogger('f1_visualization.qualifying')
 
-# Configure module logger
-logger = logging.getLogger('F1.QualifyingViz')
-
-
-def calculate_qualifying_gaps(df: pd.DataFrame) -> pd.DataFrame:
+def plot_qualifying_evolution(session):
     """
-    Calculate time gaps from pole position in qualifying.
-    
-    Args:
-        df: Qualifying results DataFrame with Position and Time columns.
-        
-    Returns:
-        pd.DataFrame: Results with Gap_To_Pole column added.
+    Visualize lap time evolution throughout Q1, Q2, and Q3.
     """
     try:
-        logger.info("Calculating qualifying gaps...")
+        laps = session.laps
         
-        if df is None or df.empty:
-            logger.warning("Empty qualifying data")
-            return pd.DataFrame()
+        # Filter for valid flying laps
+        flying_laps = laps.pick_quicklaps().reset_index()
         
-        df = df.copy()
-        
-        # Convert position to numeric
-        df['Position'] = pd.to_numeric(df['Position'], errors='coerce')
-        
-        # Sort by position
-        df = df.sort_values('Position').reset_index(drop=True)
-        
-        # Get pole time (P1)
-        pole_position = df[df['Position'] == 1]
-        if pole_position.empty:
-            logger.warning("No pole position found")
-            return df
-        
-        # Calculate gaps to pole
-        # This will be implemented based on actual time columns available
-        df['Gap_To_Pole'] = 0.0  # Placeholder
-        
-        logger.info(f"Calculated gaps for {len(df)} drivers")
-        return df
-        
-    except Exception as e:
-        logger.exception(f"Error calculating qualifying gaps: {e}")
-        return pd.DataFrame()
-
-
-def plot_qualifying_gap_analysis(
-    df: pd.DataFrame,
-    session_name: str = "Qualifying"
-) -> go.Figure:
-    """
-    Create qualifying gap analysis visualization with proper spacing.
-    
-    Args:
-        df: Qualifying results DataFrame.
-        session_name: Name of the qualifying session.
-        
-    Returns:
-        Plotly Figure object.
-    """
-    try:
-        logger.info(f"Creating qualifying gap analysis for {session_name}...")
-        
-        if df is None or df.empty:
-            logger.warning("No data for qualifying gap analysis")
-            # Return empty figure with message
-            fig = go.Figure()
-            fig.add_annotation(
-                text="No qualifying data available",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5, showarrow=False,
-                font=dict(size=20, color="gray")
-            )
-            return fig
-        
-        # Sort by position
-        df_plot = df.sort_values('Position').head(20)  # Top 20
-        
+        if flying_laps.empty:
+            return None
+            
         # Create figure
         fig = go.Figure()
         
-        # Add bars for each driver with team colors
-        for idx, row in df_plot.iterrows():
-            team_color = get_team_color(row.get('Team', ''))
+        # Q1, Q2, Q3 markers
+        # Note: FastF1 splits sessions differently depending on API version/data availability.
+        # Usually 'Split' column or time breaks define it. 
+        # Simple approach: Plot all laps over time
+        
+        # Convert session time to minutes
+        flying_laps['SessionTimeMins'] = flying_laps['LapStartTime'].dt.total_seconds() / 60
+        
+        # Color by team
+        for team in flying_laps['Team'].unique():
+            team_laps = flying_laps[flying_laps['Team'] == team]
+            # Get team color (needs session or hardcoded map if not passed)
+            # We'll assume standard plotting style handles colors or pass default
             
-            fig.add_trace(go.Bar(
-                x=[row.get('Gap_To_Pole', 0)],
-                y=[row.get('Driver', f"P{row['Position']}")],
-                orientation='h',
-                marker=dict(
-                    color=team_color,
-                    line=dict(color='white', width=1)
-                ),
-                name=row.get('Driver', ''),
-                showlegend=False,
-                text=f"+{row.get('Gap_To_Pole', 0):.3f}s" if row.get('Gap_To_Pole', 0) > 0 else "POLE",
-                textposition='outside'
+            fig.add_trace(go.Scatter(
+                x=team_laps['SessionTimeMins'],
+                y=team_laps['LapTime'].dt.total_seconds(),
+                mode='markers',
+                name=team,
+                marker=dict(size=8, opacity=0.7),
+                text=team_laps['Driver'],
+                hovertemplate="<b>%{text}</b><br>Time: %{y:.3f}s<br>Session Time: %{x:.1f}m<extra></extra>"
             ))
+            
+        # Add Trendline (Track Evolution)
+        # Fit a simple polynomial or moving average to show track improvement
+        z = np.polyfit(flying_laps['SessionTimeMins'], flying_laps['LapTime'].dt.total_seconds(), 2)
+        p = np.poly1d(z)
+        x_trend = np.linspace(flying_laps['SessionTimeMins'].min(), flying_laps['SessionTimeMins'].max(), 100)
         
-        # Update layout with proper spacing
-        fig.update_layout(
-            title=dict(
-                text=f"<b>{session_name} - Gap to Pole Position</b>",
-                font=dict(size=20, color='white'),
-                x=0.5,
-                xanchor='center'
-            ),
-            xaxis=dict(
-                title="Gap to Pole (seconds)",
-                gridcolor='rgba(128, 128, 128, 0.2)',
-                showgrid=True,
-                zeroline=True
-            ),
-            yaxis=dict(
-                title="Driver",
-                categoryorder='total ascending',
-                tickfont=dict(size=12)
-            ),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', size=14),
-            height=max(600, len(df_plot) * 30),  # Dynamic height with minimum
-            margin=dict(l=150, r=150, t=80, b=80),  # Proper margins  
-            hovermode='y unified'
-        )
-        
-        logger.info(f"Created qualifying gap chart for {len(df_plot)} drivers")
-        return fig
-        
-    except Exception as e:
-        logger.exception(f"Error creating qualifying gap analysis: {e}")
-        # Return error figure
-        fig = go.Figure()
-        fig.add_annotation(
-            text=f"Error creating visualization: {str(e)}",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="red")
-        )
-        return fig
+        fig.add_trace(go.Scatter(
+            x=x_trend,
+            y=p(x_trend),
+            mode='lines',
+            name='Track Evolution Trend',
+            line=dict(color='white', width=2, dash='dash')
+        ))
 
-
-def plot_q1_q2_q3_progression(df: pd.DataFrame) -> go.Figure:
-    """
-    Create Q1/Q2/Q3 progression chart showing driver advancement.
-    
-    Args:
-        df: Qualifying results with Q1, Q2, Q3 times.
-        
-    Returns:
-        Plotly Figure object.
-    """
-    try:
-        logger.info("Creating Q1/Q2/Q3 progression chart...")
-        
-        fig = make_subplots(
-            rows=1, cols=3,
-            subplot_titles=('Q1 Results', 'Q2 Results', 'Q3 Results'),
-            horizontal_spacing=0.12  # Proper spacing between panels
-        )
-        
-        # Add Q1, Q2, Q3 data (placeholder - actual implementation depends on data structure)
-        # This is a template that will be filled with actual data
-        
         fig.update_layout(
-            title=dict(
-                text="<b>Qualifying Session Progression</b>",
-                font=dict(size=20, color='white'),
-                x=0.5,
-                xanchor='center'
-            ),
-            plot_bgcolor='rgba(0,0,0,0)',
+            title=f"Qualifying Lap Time Evolution - {session.event.EventName}",
+            xaxis_title="Session Time (minutes)",
+            yaxis_title="Lap Time (s)",
+            height=500,
             paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white'),
-            height=600,
-            showlegend=True,
-            margin=dict(l=80, r=80, t=100, b=80)  # Proper spacing
+            yaxis=dict(autorange="reversed") # Faster times at top
         )
         
-        logger.info("Created Q1/Q2/Q3 progression chart")
         return fig
-        
     except Exception as e:
-        logger.exception(f"Error creating Q1/Q2/Q3 progression: {e}")
-        return go.Figure()
+        logger.error(f"Qualifying evolution plot error: {e}")
+        return None
 
-
-def plot_sector_time_comparison(df: pd.DataFrame) -> go.Figure:
+def plot_qualifying_gap(session):
     """
-    Create sector time comparison heatmap for qualifying.
-    
-    Args:
-        df: Qualifying results with sector times.
-        
-    Returns:
-        Plotly Figure object with proper spacing.
+    Bar chart of gaps to Pole Position.
     """
     try:
-        logger.info("Creating sector time comparison...")
+        drivers = pd.unique(session.laps['Driver'])
+        list_fastest_laps = list()
         
-        # Create heatmap or grouped bar chart
+        for drv in drivers:
+            drvs_fastest_lap = session.laps.pick_driver(drv).pick_fastest()
+            if not pd.isna(drvs_fastest_lap['LapTime']):
+                list_fastest_laps.append(drvs_fastest_lap)
+                
+        fastest_laps = pd.DataFrame(list_fastest_laps).sort_values(by='LapTime').reset_index(drop=True)
+        
+        pole_lap = fastest_laps.iloc[0]
+        fastest_laps['Gap'] = fastest_laps['LapTime'] - pole_lap['LapTime']
+        fastest_laps['GapSeconds'] = fastest_laps['Gap'].dt.total_seconds()
+        
         fig = go.Figure()
         
-        # Placeholder implementation - will be filled based on actual data structure
+        # Add bars
+        colors = [] # logic to get colors
+        # Simplification: Use simple color scale or team colors if available
+        
+        fig.add_trace(go.Bar(
+            x=fastest_laps['GapSeconds'],
+            y=fastest_laps['Driver'],
+            orientation='h',
+            text=[f"+{g:.3f}s" if g > 0 else "POLE" for g in fastest_laps['GapSeconds']],
+            textposition='outside',
+            marker_color='#E10600' # Default F1 Red
+        ))
         
         fig.update_layout(
-            title=dict(
-                text="<b>Sector Time Comparison</b>",
-                font=dict(size=20, color='white'),
-                x=0.5,
-                xanchor='center'
-            ),
-            plot_bgcolor='rgba(0,0,0,0)',
+            title="Gap to Pole",
+            xaxis_title="Gap (seconds)",
+            height=max(500, len(fastest_laps)*25),
             paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white'),
-            height=600,
-            margin=dict(l=100, r=100, t=80, b=80)  # Proper spacing
+            yaxis=dict(autorange="reversed") 
         )
         
-        logger.info("Created sector time comparison")
         return fig
-        
     except Exception as e:
-        logger.exception(f"Error creating sector comparison: {e}")
-        return go.Figure()
+        logger.error(f"Qualifying gap plot error: {e}")
+        return None
 
-
-def create_qualifying_summary_table(df: pd.DataFrame) -> pd.DataFrame:
+def plot_sector_dominance(session):
     """
-    Create a formatted summary table for qualifying results.
-    
-    Args:
-        df: Qualifying results DataFrame.
-        
-    Returns:
-        Formatted DataFrame for display.
+    Mini-sectors or sector dominance map.
+    Who was fastest in S1, S2, S3?
     """
+    # For now, simple bar chart of sector times for top 10
     try:
-        logger.info("Creating qualifying summary table...")
+        laps = session.laps.pick_quicklaps()
+        drivers = pd.unique(laps['Driver'])
         
-        if df is None or df.empty:
-            return pd.DataFrame()
+        sector_data = []
+        for drv in drivers:
+            best = laps.pick_driver(drv).pick_fastest()
+            if not pd.isna(best['LapTime']):
+                sector_data.append({
+                    'Driver': drv,
+                    'S1': best['Sector1Time'].total_seconds() if pd.notna(best['Sector1Time']) else 0,
+                    'S2': best['Sector2Time'].total_seconds() if pd.notna(best['Sector2Time']) else 0,
+                    'S3': best['Sector3Time'].total_seconds() if pd.notna(best['Sector3Time']) else 0,
+                    'Total': best['LapTime'].total_seconds()
+                })
+                
+        df = pd.DataFrame(sector_data).sort_values('Total').head(10)
         
-        # Select key columns for display
-        display_cols = ['Position', 'Driver', 'Team', 'Gap_To_Pole']
-        available_cols = [col for col in display_cols if col in df.columns]
+        if df.empty:
+            return None
+            
+        fig = go.Figure()
         
-        summary = df[available_cols].copy()
-        summary = summary.sort_values('Position').reset_index(drop=True)
+        fig.add_trace(go.Bar(name='Sector 1', x=df['Driver'], y=df['S1'], marker_color='#FF3333'))
+        fig.add_trace(go.Bar(name='Sector 2', x=df['Driver'], y=df['S2'], marker_color='#00FF00'))
+        fig.add_trace(go.Bar(name='Sector 3', x=df['Driver'], y=df['S3'], marker_color='#3333FF'))
         
-        logger.info(f"Created summary table with {len(summary)} entries")
-        return summary
+        fig.update_layout(
+            title="Top 10 - Sector Times Breakdown",
+            barmode='stack',
+            yaxis_title="Time (s)",
+            height=400,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white')
+        )
         
+        return fig
     except Exception as e:
-        logger.exception(f"Error creating summary table: {e}")
-        return pd.DataFrame()
+        logger.error(f"Sector dominance plot error: {e}")
+        return None

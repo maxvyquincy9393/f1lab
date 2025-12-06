@@ -1,0 +1,75 @@
+# F1 Analytics Dashboard - Docker Ignore
+# Files and directories to exclude from Docker build context
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Cache & Data (rebuild these in container)
+f1_cache/
+cache/
+*.ff1pkl
+
+# Git
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Documentation (not needed in container)
+*.md
+!README.md
+docs/
+
+# Jupyter Notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+# Logs
+logs/*.log
+logs/*.txt
+
+# Models (will be generated/downloaded)
+models/*.pkl
+models/*.joblib
+
+# CI/CD
+.azure/
+.vercel/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db

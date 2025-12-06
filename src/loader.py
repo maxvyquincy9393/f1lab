@@ -16,34 +16,6 @@ from pathlib import Path
 # Configure module logger
 logger = logging.getLogger('F1.Loader')
 
-# Team name normalization mapping
-TEAM_NAME_MAPPING = {
-    'McLaren Mercedes': 'McLaren',
-    'McLaren': 'McLaren',
-    'Red Bull Racing Honda RBPT': 'Red Bull Racing',
-    'Red Bull Racing Honda EBPT': 'Red Bull Racing',
-    'Red Bull Racing': 'Red Bull Racing',
-    'Racing Bulls Honda RBPT': 'RB',
-    'RB': 'RB',
-    'Kick Sauber Ferrari': 'Kick Sauber',
-    'Kick Sauber': 'Kick Sauber',
-    'Alpine Renault': 'Alpine',
-    'Alpine': 'Alpine',
-    'Williams Mercedes': 'Williams',
-    'Williams': 'Williams',
-    'Aston Martin Aramco Mercedes': 'Aston Martin',
-    'Aston Martin': 'Aston Martin',
-    'Haas Ferrari': 'Haas',
-    'Haas': 'Haas',
-    'Mercedes': 'Mercedes',
-    'Ferrari': 'Ferrari',
-}
-
-
-def normalize_team_name(team_name: str) -> str:
-    """Normalize team name to standard form."""
-    return TEAM_NAME_MAPPING.get(team_name, team_name)
-
 
 def load_data(file_path: str) -> Optional[pd.DataFrame]:
     """
@@ -96,92 +68,6 @@ def load_data(file_path: str) -> Optional[pd.DataFrame]:
         return None
 
 
-def load_combined_data(data_dir: str) -> Optional[pd.DataFrame]:
-    """
-    Load and combine race and sprint data with combined points.
-    
-    Args:
-        data_dir: Path to the data directory.
-        
-    Returns:
-        pd.DataFrame with race data and combined points (race + sprint).
-    """
-    try:
-        data_path = Path(data_dir)
-        
-        # Load race results
-        race_file = data_path / 'Formula1_2025Season_RaceResults.csv'
-        race_df = load_data(str(race_file))
-        if race_df is None:
-            return None
-        
-        # Load sprint results
-        sprint_file = data_path / 'Formula1_2025Season_SprintResults.csv'
-        sprint_df = None
-        if sprint_file.exists():
-            sprint_df = load_data(str(sprint_file))
-        
-        # Calculate combined points per driver
-        if sprint_df is not None and not sprint_df.empty:
-            sprint_points = sprint_df.groupby('Driver')['Points'].sum().to_dict()
-            
-            # Add sprint points to race data (distribute across races)
-            race_df['Sprint_Points'] = race_df['Driver'].map(sprint_points).fillna(0)
-            
-            # Calculate total points per driver across all races
-            race_df['Race_Points'] = race_df['Points']
-            
-            logger.info(f"Combined race and sprint data. Sprint races: {sprint_df['Track'].nunique()}")
-        else:
-            race_df['Sprint_Points'] = 0
-            race_df['Race_Points'] = race_df['Points']
-        
-        return race_df
-        
-    except Exception as e:
-        logger.exception(f"Error loading combined data: {e}")
-        return None
-
-
-def get_driver_total_points(data_dir: str) -> dict:
-    """
-    Calculate total points (race + sprint) per driver.
-    
-    Args:
-        data_dir: Path to the data directory.
-        
-    Returns:
-        Dictionary mapping driver name to total points.
-    """
-    try:
-        data_path = Path(data_dir)
-        
-        # Load race results
-        race_file = data_path / 'Formula1_2025Season_RaceResults.csv'
-        race_df = load_data(str(race_file))
-        if race_df is None:
-            return {}
-        
-        race_points = race_df.groupby('Driver')['Points'].sum()
-        
-        # Load sprint results
-        sprint_file = data_path / 'Formula1_2025Season_SprintResults.csv'
-        sprint_points = pd.Series(dtype=float)
-        if sprint_file.exists():
-            sprint_df = load_data(str(sprint_file))
-            if sprint_df is not None:
-                sprint_points = sprint_df.groupby('Driver')['Points'].sum()
-        
-        # Combine points
-        total_points = race_points.add(sprint_points, fill_value=0)
-        
-        return total_points.to_dict()
-        
-    except Exception as e:
-        logger.exception(f"Error calculating total points: {e}")
-        return {}
-
-
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Clean and preprocess F1 race data with comprehensive error handling.
@@ -227,11 +113,6 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         # Make a copy to avoid modifying original
         df = df.copy()
         
-        # Normalize team names
-        if 'Team' in df.columns:
-            df['Team'] = df['Team'].apply(normalize_team_name)
-            logger.info(f"Normalized team names to {df['Team'].nunique()} unique teams")
-        
         # Convert numeric columns with error handling
         df['Points'] = pd.to_numeric(df['Points'], errors='coerce').fillna(0)
         df['Position'] = pd.to_numeric(df['Position'], errors='coerce')
@@ -259,3 +140,39 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     except Exception as e:
         logger.exception(f"Error cleaning data: {e}")
         raise
+
+
+def load_combined_data(data_dir: str) -> Optional[pd.DataFrame]:
+    """
+    Load and combine Race and Sprint results.
+    
+    Args:
+        data_dir: Directory containing the CSV files.
+        
+    Returns:
+        pd.DataFrame: Combined DataFrame containing both race and sprint results.
+    """
+    try:
+        race_path = Path(data_dir) / 'Formula1_2025Season_RaceResults.csv'
+        sprint_path = Path(data_dir) / 'Formula1_2025Season_SprintResults.csv'
+        
+        df_race = load_data(str(race_path))
+        
+        if df_race is None:
+            return None
+            
+        df_race['SessionType'] = 'Race'
+        
+        if sprint_path.exists():
+            df_sprint = load_data(str(sprint_path))
+            if df_sprint is not None and not df_sprint.empty:
+                df_sprint['SessionType'] = 'Sprint'
+                # Ensure we don't have conflicting index or columns if concatenating
+                return pd.concat([df_race, df_sprint], ignore_index=True)
+        
+        return df_race
+        
+    except Exception as e:
+        logger.error(f"Error loading combined data: {e}")
+        return None
+

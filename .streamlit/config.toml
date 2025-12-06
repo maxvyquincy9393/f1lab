@@ -1,14 +1,27 @@
-[server]
-headless = true
-port = 8501
-enableCORS = false
-enableXsrfProtection = false
-
-[browser]
-gatherUsageStats = false
-
 [theme]
-primaryColor = "#E10600"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#FAFAFA"
+base="dark"
+primaryColor="#E10600"
+backgroundColor="#0E1117"
+secondaryBackgroundColor="#1a1a2e"
+textColor="#FFFFFF"
+font="sans serif"
+
+[client]
+# Hide "Made with Streamlit" footer
+toolbar.show = false
+showSidebarNav = false
+
+# Hide Deploy button from top right
+showToolbar = false
+
+[global]
+# Enables or disables the Streamlit telemetry, which is usage statistics
+# sent to Streamlit.
+# If you care about privacy, disable this.
+logTelemetry = false
+
+[server]
+# Set the port that your Streamlit app should run on.
+port = 8501
+maxUploadSize = 200 # MB
+maxMessageSize = 200 # MB

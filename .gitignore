@@ -1,16 +1,14 @@
-# F1 Visualization Project - Git Ignore
+# F1 Analytics Dashboard - Git Ignore
 # =====================================
 
-# Python
+# 1. Python & Runtime
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
 eggs/
 .eggs/
 lib/
@@ -22,44 +20,59 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual Environment
+# 2. Virtual Environment
 .venv/
 venv/
-ENV/
 env/
+ENV/
 .env
 
-# Jupyter Notebook
-.ipynb_checkpoints/
-*.ipynb_checkpoints
-
-# FastF1 Cache
-cache/
+# 3. Data & Cache (IMPORTANT)
+# Ignore FastF1 cache to save space
 f1_cache/
-*.cache
+cache/
+# Ignore raw CSVs if they are large or can be re-downloaded
+# data/*.csv
+# !data/.gitkeep
 
-# IDE
+# 4. Models (Optional - Keep if small, ignore if large)
+models/*.pkl
+models/*.joblib
+!models/.gitkeep
+
+# 5. Logs
+logs/*.log
+logs/*.txt
+!logs/.gitkeep
+
+# 6. Jupyter Notebooks
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# 7. Testing & Coverage
+.coverage
+.pytest_cache/
+htmlcov/
+*.cover
+htmlcov/
+.tox/
+
+# 7. IDE & OS Settings
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-
-# OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Project Specific
-models/*.pkl
-!models/.gitkeep
-
-# Logs
-*.log
+# 8. Logs
 logs/
+*.log
 
-# Temporary files
+# 9. Streamlit & Deployment
+.streamlit/secrets.toml
+.vercel/
 *.tmp
-*.temp
-.temp/

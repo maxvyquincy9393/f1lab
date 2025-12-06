@@ -968,6 +968,41 @@ def get_race_results(session: Any) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+
+def get_circuit_layout_info(session: Any) -> Dict[str, Any]:
+    """
+    Get detailed circuit layout information including corners and rotation.
+    
+    Args:
+        session: FastF1 Session object
+        
+    Returns:
+        Dict with rotation and corners data
+    """
+    if session is None:
+        return {}
+    
+    try:
+        info = session.get_circuit_info()
+        
+        corners = []
+        if info is not None and info.corners is not None:
+            corners = info.corners.to_dict('records')
+            
+        marshal_lights = []
+        if info is not None and info.marshal_lights is not None:
+            marshal_lights = info.marshal_lights.to_dict('records')
+            
+        return {
+            'rotation': info.rotation if info else 0,
+            'corners': corners,
+            'marshal_lights': marshal_lights
+        }
+    except Exception as e:
+        logger.error(f"Error getting circuit info: {e}")
+        return {}
+
+
 # ============================================================
 # UTILITY FUNCTIONS
 # ============================================================
@@ -1017,3 +1052,38 @@ def get_driver_team(session: Any, driver: str) -> str:
         
     except:
         return "Unknown"
+
+
+def export_session_to_csv(session: Any) -> Dict[str, str]:
+    """
+    Export session data to CSV strings.
+    
+    Args:
+        session: FastF1 Session object
+        
+    Returns:
+        Dict with CSV strings for 'laps', 'results', 'weather'
+    """
+    if session is None:
+        return {}
+    
+    exports = {}
+    
+    try:
+        # Laps
+        if session.laps is not None:
+            exports['laps'] = session.laps.to_csv(index=False)
+            
+        # Results
+        if session.results is not None:
+            exports['results'] = session.results.to_csv(index=False)
+            
+        # Weather
+        if hasattr(session, 'weather_data') and session.weather_data is not None:
+            exports['weather'] = session.weather_data.to_csv(index=False)
+            
+        return exports
+    except Exception as e:
+        logger.error(f"Error exporting session data: {e}")
+        return {}
+

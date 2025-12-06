@@ -6,8 +6,8 @@ Thank you for your interest in contributing to this project!
 
 ### 1. Fork the Repository
 ```bash
-git clone https://github.com/maxvyquincy9393/4OOP.git
-cd 4OOP
+git clone https://github.com/maxvyquincy9393/hub.git
+cd "f1 visualization"
 ```
 
 ### 2. Set Up Development Environment

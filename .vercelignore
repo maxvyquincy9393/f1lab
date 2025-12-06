@@ -1,0 +1,28 @@
+# Cache directories
+cache/
+f1_cache/
+.venv/
+__pycache__/
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+notebooks/
+
+# Models (if large)
+models/*.pkl
+models/*.joblib
+
+# Logs
+*.log
+logs.zip
+
+# Local config
+.env.local
+.vercel/
