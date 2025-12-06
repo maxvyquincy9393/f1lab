@@ -93,10 +93,29 @@ st.markdown("""
     .css-18ni7ap {display: none;}
     .css-1dp5vir {display: none;}
     
-    /* Hide floating action buttons */
-    .st-emotion-cache-1gulkj5 {display: none;}
-    .st-emotion-cache-1wmy9hl {display: none;}
-    [data-testid="stChatActionButtonIcon"] {display: none;}
+    /* Hide floating action buttons - ALL VARIANTS */
+    .st-emotion-cache-1gulkj5 {display: none !important;}
+    .st-emotion-cache-1wmy9hl {display: none !important;}
+    [data-testid="stChatActionButtonIcon"] {display: none !important;}
+    
+    /* Hide bottom right floating buttons */
+    div[data-testid="stBottomBlockContainer"] {display: none !important;}
+    .stActionButton {display: none !important;}
+    button[data-testid="stActionButton"] {display: none !important;}
+    
+    /* Hide ALL bottom right corner elements */
+    div[class*="fixed"] {display: none !important;}
+    div[style*="position: fixed"][style*="bottom"] {display: none !important;}
+    div[style*="position: fixed"][style*="right"] {display: none !important;}
+    
+    /* Target the specific buttons in screenshot */
+    button[aria-label*="Location"] {display: none !important;}
+    button[kind="primaryFormSubmit"] {display: none !important;}
+    div.stChatFloatingButtonContainer {display: none !important;}
+    
+    /* Hide streamlit branding */
+    ._profileContainer_gzau3_53 {display: none !important;}
+    ._profilePreview_gzau3_63 {display: none !important;}
     
     /* Custom styling */
     .main-header {
