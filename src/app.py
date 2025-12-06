@@ -263,6 +263,39 @@ def load_fastf1_session(year: int, race: str, session_type: str):
         return None
 
 
+@st.cache_data(ttl=3600)
+def get_real_grid_positions(year: int, race: str) -> dict:
+    """
+    Fetch actual Qualifying grid positions from FastF1.
+    """
+    try:
+        # Try Loading Qualifying
+        session = fastf1.get_session(year, race, 'Q')
+        # Light load (no telemetry)
+        session.load(telemetry=False, laps=False, weather=False)
+        
+        if session.results is None or session.results.empty:
+            return {}
+            
+        # Create mapping: Driver -> GridPosition
+        # Ensure GridPosition is valid (not 0.0 unless pole?)
+        # 0.0 usually means pit lane or DQ? No, 0.0 is unclassified?
+        # Pole is 1.0. FastF1 uses 0.0 for missing?
+        grid_map = {}
+        for drv in session.results['Abbreviation']:
+            res = session.results.loc[session.results['Abbreviation'] == drv].iloc[0]
+            grid = res['GridPosition']
+            if grid <= 0:
+                # Fallback to Position if Grid is 0 (e.g. penalities applied later, or just use finish position of Q)
+                grid = res['Position']
+            grid_map[drv] = grid
+            
+        return grid_map
+    except Exception as e:
+        logger.warning(f"Could not fetch real grid for {race}: {e}")
+        return {}
+
+
 def create_gauge(value, max_value, title, color="#E10600"):
     """Create a gauge chart for telemetry display."""
     # Safely convert value to float
@@ -2265,7 +2298,7 @@ def render_race_analysis_tab(df):
                     battle_b = st.selectbox("Driver B", [d for d in drivers_list if d != battle_a], key="battle_b")
                 
                 # Context Map
-                with st.expander("📍 Circuit Context", expanded=False):
+                with st.expander("Circuit Context", expanded=False):
                     ctx_fig = plot_circuit_context(session)
                     if ctx_fig: show_plotly_chart(ctx_fig, use_container_width=False)
 
@@ -2317,7 +2350,7 @@ def render_race_analysis_tab(df):
         st.subheader("Strategy Analysis")
         try:
             # 1. Tyre Visuals (New)
-            st.markdown("### 🍩 Tyre Stint Analysis")
+            st.markdown("### Tyre Stint Analysis")
             s_laps = session.laps
             driver_sel = st.selectbox("Select Driver for Stint View", sorted(s_laps['Driver'].unique()), key="stint_viz_drv")
             
@@ -2647,6 +2680,16 @@ def render_prediction_tab(df, total_points_combined=None):
                 # For now, we'll construct the feature DF and assume encoders are handled or we pass raw if pipeline supports it.
                 # Actually, prepare_features(train_mode=False) loads encoders.
                 
+                # Live Data Injection
+                real_grid = get_real_grid_positions(2025, race_name)
+                using_live = False
+                
+                if real_grid:
+                    st.success(f"Using Live Qualifying Grid for {race_name}")
+                    using_live = True
+                else:
+                    st.warning("Qualifying data unavailable. Using historical averages (accuracy lower).")
+
                 # Create a dataframe for all drivers for the next race
                 pred_rows = []
                 for driver in drivers:
@@ -2662,11 +2705,17 @@ def render_prediction_tab(df, total_points_combined=None):
                         avg_grid = driver_data['Starting Grid'].mean() if 'Starting Grid' in driver_data.columns else 10
                     else:
                         avg_grid = 10
-                        
+                    
+                    # INJECT LIVE GRID
+                    if using_live:
+                         start_pos = real_grid.get(driver, avg_grid)
+                    else:
+                         start_pos = round(avg_grid)
+
                     pred_rows.append({
                         'Driver': driver,
                         'Team': team,
-                        'Starting Grid': round(avg_grid),
+                        'Starting Grid': start_pos,
                         'Track': race_name,
                         'Finished': True # Dummy for feature prep
                     })
@@ -3459,4 +3508,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        st.error(f"Critical Error: {e}")
+        st.code(traceback.format_exc())

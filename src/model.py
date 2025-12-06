@@ -14,7 +14,7 @@ import pickle
 from typing import Optional, Tuple
 
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.model_selection import train_test_split
 
 try:
@@ -27,30 +27,18 @@ logger = logging.getLogger('F1.Model')
 
 # Model configuration
 MODEL_PATH = 'models/f1_model.pkl'
-N_ESTIMATORS = 100
+N_ESTIMATORS = 100 # Represents max_iter for GBM
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 
 
 def train_model(
     df: pd.DataFrame
-) -> Tuple[RandomForestRegressor, pd.DataFrame, pd.Series]:
+) -> Tuple[HistGradientBoostingRegressor, pd.DataFrame, pd.Series]:
     """
-    Train a Random Forest model for race position prediction.
+    Train a Gradient Boosting model (SOTA for Tabular Data).
     
-    The model is trained on historical race data to predict
-    finishing position based on starting grid, driver, team, and track.
-    
-    Args:
-        df: Cleaned race DataFrame with Position, Starting Grid,
-            Driver, Team, Track, and Finished columns.
-        
-    Returns:
-        Tuple of (trained model, X_test, y_test) for evaluation.
-        
-    Example:
-        >>> model, X_test, y_test = train_model(df_race)
-        >>> predictions = model.predict(X_test)
+    Uses HistGradientBoostingRegressor for O(n) efficiency and native NaN handling.
     """
     logger.info("Starting model training...")
     
@@ -67,11 +55,13 @@ def train_model(
     logger.info(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
     
     # Train model
-    logger.info(f"Training RandomForestRegressor (n_estimators={N_ESTIMATORS})...")
-    model = RandomForestRegressor(
-        n_estimators=N_ESTIMATORS, 
+    logger.info(f"Training HistGradientBoostingRegressor...")
+    model = HistGradientBoostingRegressor(
+        max_iter=N_ESTIMATORS,
+        learning_rate=0.1,
+        max_depth=10,
         random_state=RANDOM_STATE,
-        n_jobs=-1  # Use all CPU cores
+        early_stopping=True
     )
     model.fit(X_train, y_train)
     
@@ -89,7 +79,7 @@ def train_model(
     return model, X_test, y_test
 
 
-def load_trained_model() -> Optional[RandomForestRegressor]:
+def load_trained_model() -> Optional[HistGradientBoostingRegressor]:
     """Load model from disk (Legacy support)."""
     try:
         if os.path.exists(MODEL_PATH):
