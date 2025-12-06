@@ -90,21 +90,6 @@ def train_model(
 
 
 def load_trained_model() -> Optional[RandomForestRegressor]:
-    """
-    Load a previously trained model from disk.
-    
-    Returns:
-        RandomForestRegressor or None: Trained model or None if not found.
-        
-    Example:
-        >>> model = load_trained_model()
-        >>> if model is not None:
-        ...     prediction = model.predict(X_new)
-    """
-    return model, X_test, y_test
-
-
-def load_trained_model() -> Optional[RandomForestRegressor]:
     """Load model from disk (Legacy support)."""
     try:
         if os.path.exists(MODEL_PATH):
