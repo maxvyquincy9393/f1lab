@@ -15,6 +15,11 @@ showErrorDetails = false
 # Hide the Fork, GitHub, and settings menu from the app
 gatherUsageStats = false
 
+[ui]
+# Hide top bar completely
+hideTopBar = true
+hideSidebarNav = true
+
 [server]
 # Set the port that your Streamlit app should run on.
 port = 8501

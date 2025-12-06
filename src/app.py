@@ -86,6 +86,18 @@ st.markdown("""
     button[title="View source on GitHub"] {display: none;}
     a[href*="github.com"] {display: none !important;}
     
+    /* Hide Streamlit logo/branding bottom right */
+    .stDeployButton {display: none;}
+    div[data-testid="stDecoration"] {display: none;}
+    button[kind="header"] {display: none;}
+    .css-18ni7ap {display: none;}
+    .css-1dp5vir {display: none;}
+    
+    /* Hide floating action buttons */
+    .st-emotion-cache-1gulkj5 {display: none;}
+    .st-emotion-cache-1wmy9hl {display: none;}
+    [data-testid="stChatActionButtonIcon"] {display: none;}
+    
     /* Custom styling */
     .main-header {
         font-size: 2.5rem;
