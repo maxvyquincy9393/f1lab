@@ -1,7 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 Visualization Package.
+f1_analytics
+~~~~~~~~~~~~
+F1 Analytics package providing data loading, analysis, and visualization.
 
-Provides data loading, analysis, and visualization for F1 racing data.
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 try:
@@ -36,7 +40,7 @@ except ImportError:
         evaluate_model = None
 
 __version__ = "1.0.0"
-__author__ = "maxvy"
+__author__ = "F1 Analytics Team"
 
 __all__ = [
     "load_data",

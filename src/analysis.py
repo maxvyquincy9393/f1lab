@@ -1,11 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 Data Analysis Module.
+analysis.py
+~~~~~~~~~~~
+Championship standings and race statistics.
 
-Provides statistical analysis functions for F1 race and sprint data.
-Includes driver standings, team standings, and race statistics.
-
-Author: F1 Analytics Team
-Version: 2.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import logging
@@ -13,8 +13,7 @@ import pandas as pd
 import numpy as np
 from typing import Optional
 
-# Configure module logger
-logger = logging.getLogger('F1.Analysis')
+logger = logging.getLogger(__name__)
 
 # F1 2025 Calendar Order (official schedule)
 F1_2025_CALENDAR = [
@@ -26,30 +25,7 @@ F1_2025_CALENDAR = [
 
 
 def calculate_driver_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate comprehensive driver statistics from race data with error handling.
-    
-    Computes the following metrics per driver:
-    - Total Points, Average Points, Race Count
-    - Average/Best/Worst Position
-    - Finishes count, Fastest Laps
-    - Wins, Podiums, Win Rate, Finish Rate
-    
-    Args:
-        df: Cleaned race DataFrame with Position, Points, Finished columns.
-        
-    Returns:
-        pd.DataFrame: Driver statistics indexed by driver name.
-        
-    Raises:
-        ValueError: If DataFrame is empty or missing required columns
-        
-    Example:
-        >>> df = load_data('data/Formula1_2025Season_RaceResults.csv')
-        >>> df = clean_data(df)
-        >>> driver_stats = calculate_driver_stats(df)
-        >>> print(driver_stats.loc['Max Verstappen'])
-    """
+    """Aggregate driver statistics from race results."""
     logger.info("Calculating driver statistics...")
     
     try:
@@ -103,22 +79,7 @@ def calculate_driver_stats(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_team_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate comprehensive team/constructor statistics.
-    
-    Computes the following metrics per team:
-    - Total Points, Average Points per Entry
-    - Number of Drivers
-    - Average Position, Average Grid Position
-    - Finishes, Fastest Laps
-    - Points per Driver, Finish Rate
-    
-    Args:
-        df: Cleaned race DataFrame.
-        
-    Returns:
-        pd.DataFrame: Team statistics indexed by team name.
-    """
+    """Aggregate constructor statistics from race results."""
     logger.info("Calculating team statistics...")
     team_agg = df.groupby('Team').agg({
         'Points': ['sum', 'mean'],
@@ -152,15 +113,7 @@ def calculate_team_stats(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_race_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculate statistics per race/track.
-    
-    Args:
-        df: Cleaned race DataFrame.
-        
-    Returns:
-        pd.DataFrame: Race statistics indexed by track name.
-    """
+    """Aggregate per-track statistics."""
     logger.info("Calculating race statistics...")
     race_stats = df.groupby('Track').agg({
         'Driver': 'count',
@@ -178,24 +131,7 @@ def calculate_combined_standings(
     df_race: pd.DataFrame, 
     df_sprint: Optional[pd.DataFrame]
 ) -> pd.DataFrame:
-    """
-    Calculate combined driver standings with Race + Sprint points.
-    
-    This matches the official F1 championship standings calculation
-    where total points = race points + sprint race points.
-    
-    Args:
-        df_race: Race results DataFrame.
-        df_sprint: Sprint results DataFrame (can be None).
-        
-    Returns:
-        pd.DataFrame: Combined standings with Position, Team, Race_Points,
-                      Sprint_Points, Total_Points, Wins columns.
-                      
-    Example:
-        >>> standings = calculate_combined_standings(df_race, df_sprint)
-        >>> print(standings.head())
-    """
+    """Merge race and sprint points into championship standings."""
     logger.info("Calculating combined driver standings...")
     # Ensure Points column is numeric and fill NaN with 0
     df_sprint = df_sprint.copy()

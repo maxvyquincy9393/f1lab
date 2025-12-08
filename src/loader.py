@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 Data Loader Module.
+loader.py
+~~~~~~~~~
+CSV data loading and preprocessing.
 
-Provides functions for loading and cleaning F1 race data from CSV files.
-
-Author: F1 Analytics Team
-Version: 2.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import logging
@@ -13,25 +14,11 @@ import numpy as np
 from typing import Optional
 from pathlib import Path
 
-# Configure module logger
-logger = logging.getLogger('F1.Loader')
+logger = logging.getLogger(__name__)
 
 
 def load_data(file_path: str) -> Optional[pd.DataFrame]:
-    """
-    Load F1 data from a CSV file with comprehensive error handling.
-    
-    Args:
-        file_path: Path to the CSV file.
-        
-    Returns:
-        pd.DataFrame or None: Loaded data or None if loading fails.
-        
-    Example:
-        >>> df = load_data('data/Formula1_2025Season_RaceResults.csv')
-        >>> if df is not None:
-        ...     print(f"Loaded {len(df)} rows")
-    """
+    """Load race data from CSV. Returns None on failure."""
     try:
         logger.info(f"Loading data from {file_path}")
         
@@ -69,31 +56,7 @@ def load_data(file_path: str) -> Optional[pd.DataFrame]:
 
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean and preprocess F1 race data with comprehensive error handling.
-    
-    Performs the following cleaning operations:
-    - Validates input DataFrame
-    - Converts Points to numeric (fills NaN with 0)
-    - Converts Position to numeric
-    - Converts Starting Grid to numeric
-    - Converts Laps to numeric
-    - Creates Finished flag based on Position and Time/Retired
-    
-    Args:
-        df: Raw DataFrame from CSV.
-        
-    Returns:
-        pd.DataFrame: Cleaned DataFrame with proper data types.
-        
-    Raises:
-        ValueError: If required columns are missing
-        
-    Example:
-        >>> df_raw = load_data('data/Formula1_2025Season_RaceResults.csv')
-        >>> df_clean = clean_data(df_raw)
-        >>> print(df_clean.dtypes)
-    """
+    """Normalize column types and create derived fields."""
     logger.info("Cleaning data...")
     
     try:

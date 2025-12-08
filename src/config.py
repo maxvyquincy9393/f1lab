@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-Configuration settings for F1 Visualization project.
+config.py
+~~~~~~~~~
+Application constants and configuration.
 
-This module provides centralized configuration for paths, constants,
-and settings used throughout the application.
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import os
@@ -12,9 +15,9 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
 
-# ============================================================
-# PATH CONFIGURATION  
-# ============================================================
+# -----------------------------------------------------------------------------
+# Path Configuration
+# -----------------------------------------------------------------------------
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
