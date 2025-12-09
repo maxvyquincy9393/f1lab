@@ -1,11 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 Model Evaluation Module.
+evaluate.py
+~~~~~~~~~~~
+Model evaluation metrics and diagnostic plots.
 
-Provides functions for evaluating ML model performance with
-various metrics and visualization capabilities.
-
-Author: F1 Analytics Team
-Version: 2.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import logging
@@ -17,8 +17,7 @@ import pandas as pd
 import seaborn as sns
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-# Configure module logger
-logger = logging.getLogger('F1.Evaluate')
+logger = logging.getLogger(__name__)
 
 
 def evaluate_model(
@@ -26,28 +25,7 @@ def evaluate_model(
     X_test: pd.DataFrame, 
     y_test: pd.Series
 ) -> Tuple[Dict[str, float], pd.DataFrame]:
-    """
-    Evaluate model performance with multiple metrics.
-    
-    Computes the following metrics:
-    - MAE (Mean Absolute Error): Average absolute difference
-    - MSE (Mean Squared Error): Average squared difference
-    - RMSE (Root Mean Squared Error): Square root of MSE
-    - R2 (R-squared): Coefficient of determination
-    
-    Args:
-        model: Trained model with predict method.
-        X_test: Test features DataFrame.
-        y_test: Test target Series.
-        
-    Returns:
-        Tuple of (metrics dict, results DataFrame with Actual/Predicted).
-        
-    Example:
-        >>> metrics, results = evaluate_model(model, X_test, y_test)
-        >>> print(f"MAE: {metrics['MAE']:.2f}")
-        >>> print(f"R2: {metrics['R2']:.3f}")
-    """
+    """Compute MAE, RMSE, R² and return predictions DataFrame."""
     logger.info("Evaluating model performance...")
     
     # Generate predictions
@@ -85,16 +63,7 @@ def plot_predictions(
     results_df: pd.DataFrame,
     save_path: str = None
 ) -> plt.Figure:
-    """
-    Plot actual vs predicted positions.
-    
-    Creates a scatter plot with ideal line for visual evaluation.
-    
-    Args:
-        results_df: DataFrame with Actual and Predicted columns.
-        save_path: Optional path to save the figure.
-        
-    Returns:
+    """Scatter plot of actual vs predicted positions."""
         matplotlib Figure object.
     """
     logger.info("Creating prediction plot...")
@@ -134,16 +103,7 @@ def plot_error_distribution(
     results_df: pd.DataFrame,
     save_path: str = None
 ) -> plt.Figure:
-    """
-    Plot the distribution of prediction errors.
-    
-    Args:
-        results_df: DataFrame with Error column.
-        save_path: Optional path to save the figure.
-        
-    Returns:
-        matplotlib Figure object.
-    """
+    """Histogram of prediction residuals."""
     logger.info("Creating error distribution plot...")
     
     fig, ax = plt.subplots(figsize=(10, 6))

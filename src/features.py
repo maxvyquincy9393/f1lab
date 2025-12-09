@@ -1,11 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 Feature Engineering Module.
+features.py
+~~~~~~~~~~~
+Feature engineering for race prediction models.
 
-Provides feature preparation and encoding for machine learning models.
-Handles categorical encoding for Driver, Team, and Track features.
-
-Author: F1 Analytics Team
-Version: 2.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import logging
@@ -16,48 +16,14 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
-# Configure module logger
-logger = logging.getLogger('F1.Features')
+logger = logging.getLogger(__name__)
 
 
 def prepare_features(
     df: pd.DataFrame, 
     train_mode: bool = True
 ) -> Tuple[pd.DataFrame, Optional[pd.Series], Dict[str, LabelEncoder]]:
-    """
-    Prepare features for ML model training or prediction with error handling.
-    
-    Features used:
-    - Starting Grid (numeric)
-    - Driver (encoded)
-    - Team (encoded)
-    - Track (encoded)
-    
-    In training mode:
-    - Filters to only finished races
-    - Fits and saves label encoders
-    - Returns target variable (Position)
-    
-    In prediction mode:
-    - Loads saved encoders
-    - Returns None for target
-    
-    Args:
-        df: Input DataFrame with race data.
-        train_mode: If True, fit encoders and return target.
-                   If False, load encoders for prediction.
-        
-    Returns:
-        Tuple of (X features, y target, encoders dict).
-        y is None if train_mode is False.
-        
-    Raises:
-        ValueError: If required columns are missing
-        
-    Example:
-        >>> X, y, encoders = prepare_features(df_train, train_mode=True)
-        >>> print(f"Features shape: {X.shape}")
-    """
+    """Transform race data into encoded feature matrix for model input."""
     logger.info(f"Preparing features (train_mode={train_mode})...")
     
     try:

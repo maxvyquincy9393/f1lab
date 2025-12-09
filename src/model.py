@@ -1,11 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 Machine Learning Model Module.
+model.py
+~~~~~~~~
+Race position prediction model.
 
-Provides model training and loading functions for race position prediction.
-Uses Random Forest Regressor as the base model.
-
-Author: F1 Analytics Team
-Version: 2.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import logging
@@ -22,12 +22,10 @@ try:
 except ImportError:
     from features import prepare_features
 
-# Configure module logger
-logger = logging.getLogger('F1.Model')
+logger = logging.getLogger(__name__)
 
-# Model configuration
 MODEL_PATH = 'models/f1_model.pkl'
-N_ESTIMATORS = 100 # Represents max_iter for GBM
+N_ESTIMATORS = 100
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 
@@ -35,11 +33,7 @@ RANDOM_STATE = 42
 def train_model(
     df: pd.DataFrame
 ) -> Tuple[HistGradientBoostingRegressor, pd.DataFrame, pd.Series]:
-    """
-    Train a Gradient Boosting model (SOTA for Tabular Data).
-    
-    Uses HistGradientBoostingRegressor for O(n) efficiency and native NaN handling.
-    """
+    """Train position prediction model on race data."""
     logger.info("Starting model training...")
     
     # Prepare features
@@ -80,7 +74,7 @@ def train_model(
 
 
 def load_trained_model() -> Optional[HistGradientBoostingRegressor]:
-    """Load model from disk (Legacy support)."""
+    """Load persisted model from disk."""
     try:
         if os.path.exists(MODEL_PATH):
             with open(MODEL_PATH, 'rb') as f:
@@ -91,10 +85,7 @@ def load_trained_model() -> Optional[HistGradientBoostingRegressor]:
 
 
 class RaceStrategySimulator:
-    """
-    God Mode Simulation Engine.
-    Simulates race pace using physics-based decay curves (Tyre Deg + Fuel Burn).
-    """
+    """Race strategy optimizer using tyre degradation and fuel models."""
     
     def __init__(self, base_lap_time: float = 90.0, total_laps: int = 57):
         self.base_lap_time = base_lap_time
