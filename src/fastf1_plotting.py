@@ -1,3 +1,12 @@
+# -*- coding: utf-8 -*-
+"""
+fastf1_plotting.py
+~~~~~~~~~~~~~~~~~~
+Matplotlib track and telemetry plots.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
+"""
 
 import fastf1
 import fastf1.plotting
@@ -6,8 +15,7 @@ import pandas as pd
 import io
 import logging
 
-# Setup logging
-logger = logging.getLogger('f1_visualization.fastf1_plotting')
+logger = logging.getLogger(__name__)
 
 def setup_f1_plotting():
     """Initialize FastF1 plotting style."""

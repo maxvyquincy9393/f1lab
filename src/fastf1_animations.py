@@ -1,11 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-FastF1 Advanced Animation Module.
+fastf1_animations.py
+~~~~~~~~~~~~~~~~~~~~
+Animation frame generators for track visualization.
 
-Provides comprehensive animation and visualization functions for F1 telemetry data.
-Includes position tracking, gear changes, DRS zones, tire strategy, and more.
-
-Author: F1 Analytics Team
-Version: 2.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import logging
@@ -13,8 +13,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
 
-# Setup logging
-logger = logging.getLogger('f1_visualization.fastf1_animations')
+logger = logging.getLogger(__name__)
 
 
 def get_position_animation_data(

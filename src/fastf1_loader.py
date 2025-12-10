@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-FastF1 Loader Module
+fastf1_loader.py
+~~~~~~~~~~~~~~~~
+FastF1 session loading with caching and retry logic.
 
-This module provides wrapper functions for the FastF1 library,
-with proper error handling, logging, and retry mechanisms.
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import fastf1
@@ -14,10 +17,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
 from functools import wraps
 
-# Setup logging
-logger = logging.getLogger('f1_visualization.fastf1_loader')
+logger = logging.getLogger(__name__)
 
-# Cache configuration
 CACHE_DIR = Path(__file__).parent.parent / 'cache'
 CACHE_DIR.mkdir(exist_ok=True)
 fastf1.Cache.enable_cache(str(CACHE_DIR))
@@ -35,13 +36,7 @@ def retry_on_error(
     max_attempts: int = DEFAULT_RETRY_ATTEMPTS,
     delay: float = DEFAULT_RETRY_DELAY
 ):
-    """
-    Decorator to retry function on error.
-    
-    Args:
-        max_attempts: Maximum number of retry attempts
-        delay: Delay between retries in seconds
-    """
+    """Decorator for automatic retry with exponential backoff."""
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -73,18 +68,7 @@ def get_session(
     race: Union[str, int],
     session_type: str = 'R'
 ) -> Optional[Any]:
-    """
-    Load a FastF1 session with error handling and retry.
-    
-    Args:
-        year: Season year (e.g., 2025)
-        race: Race name, location, or round number
-        session_type: Session type - 'R' (Race), 'Q' (Qualifying), 
-                     'FP1', 'FP2', 'FP3', 'S' (Sprint), 'SQ' (Sprint Qualifying)
-    
-    Returns:
-        FastF1 Session object or None if loading fails
-    """
+    """Load and cache a FastF1 session."""
     logger.info(f"Loading session: {year} {race} - {session_type}")
     
     try:

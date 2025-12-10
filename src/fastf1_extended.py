@@ -1,19 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-FastF1 Extended Module - Comprehensive F1 Data Access
+fastf1_extended.py
+~~~~~~~~~~~~~~~~~~
+Extended FastF1 data extraction utilities.
 
-This module provides advanced FastF1 functions for:
-- Session info (schedule, timing, duration)
-- Weather data (temperature, humidity, wind, conditions)
-- Tyre strategy (compounds, age, stints)
-- Pit stops (lap, duration, time)
-- Sector times (S1, S2, S3)
-- Speed traps
-- Track status (flags, SC, VSC)
-- Car data (ERS, throttle, brake, RPM)
-- Position data (per lap, intervals, gaps)
-
-Author: F1 Analytics Team
-Version: 1.0.0
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import fastf1
@@ -24,8 +16,7 @@ from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Setup logging
-logger = logging.getLogger('f1_visualization.fastf1_extended')
+logger = logging.getLogger(__name__)
 
 # Cache setup
 CACHE_DIR = Path(__file__).parent.parent / 'cache'
