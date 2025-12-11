@@ -1,7 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 2025 Season Dashboard - Comprehensive Analytics
-Professional dashboard with driver profiles, race details, telemetry, and predictions.
-2025 Season Only.
+app.py
+~~~~~~
+Streamlit dashboard entry point.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import streamlit as st
@@ -19,7 +23,6 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -252,11 +255,14 @@ def load_sprint_data():
         return None
 
 
-def load_fastf1_session(year: int, race: str, session_type: str):
-    """Load FastF1 session with caching."""
+def load_fastf1_session(year: int, race: str, session_type: str, load_telemetry: bool = False):
+    """Load FastF1 session with caching and optional telemetry."""
     try:
         session = fastf1.get_session(year, race, session_type)
-        session.load()
+        if load_telemetry:
+            session.load()
+        else:
+            session.load(telemetry=False, laps=True, weather=True)
         return session
     except Exception as e:
         logger.error(f"Error loading FastF1 session: {e}")
@@ -370,7 +376,7 @@ def format_f1_time(td: pd.Timedelta) -> str:
 def render_header():
     """Render dashboard header."""
     st.markdown('<h1 class="main-header">F1 2025 Season Dashboard</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Comprehensive Analytics | Race Data | Telemetry | Predictions</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">Analytics | Telemetry | Predictions</p>', unsafe_allow_html=True)
 
 
 def render_overview_tab(df, total_points_combined=None):
@@ -2590,7 +2596,7 @@ def render_race_analysis_tab(df):
         eng_tabs = st.tabs(["Pit Stop Details", "Tyre Degradation"])
         
         with eng_tabs[0]:
-            st.markdown("#### Comprehensive Pit Analysis")
+            st.markdown("#### Pit Stop Analysis")
             try:
                 pit_detailed = get_detailed_pit_analysis(session)
                 if not pit_detailed.empty:

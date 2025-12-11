@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+"""
+home.py
+~~~~~~~
+Dashboard home tab with schedule display.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
+"""
+
 import streamlit as st
 import pandas as pd
 import fastf1

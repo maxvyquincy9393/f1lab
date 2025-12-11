@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+"""
+advanced_viz.py
+~~~~~~~~~~~~~~~
+Telemetry comparison and track visualizations.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
+"""
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import fastf1
@@ -5,8 +15,7 @@ import numpy as np
 import pandas as pd
 import logging
 
-# Setup logging
-logger = logging.getLogger('f1_visualization.advanced_viz')
+logger = logging.getLogger(__name__)
 
 def get_driver_color(driver, session):
     """Helper to get team color for a driver."""

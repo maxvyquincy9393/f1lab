@@ -1,6 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-F1 2025 Season Dashboard - Dash Version
-Professional dashboard with driver profiles, race details, telemetry, and predictions.
+dash_app.py
+~~~~~~~~~~~
+Plotly Dash frontend for serverless deployment.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import dash

@@ -1,10 +1,20 @@
+# -*- coding: utf-8 -*-
+"""
+qualifying_viz.py
+~~~~~~~~~~~~~~~~~
+Qualifying session charts and analysis.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
+"""
+
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
 import logging
 
-logger = logging.getLogger('f1_visualization.qualifying')
+logger = logging.getLogger(__name__)
 
 def plot_qualifying_evolution(session):
     """
