@@ -1,5 +1,2 @@
-"""
-F1 Visualization - Test Suite
-==============================
-Unit tests for the F1 visualization project.
-"""
+# -*- coding: utf-8 -*-
+"""Test suite for F1 Analytics."""

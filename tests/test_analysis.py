@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-Tests for the analysis module.
+test_analysis.py
+~~~~~~~~~~~~~~~~
+Unit tests for the analysis module.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import pytest

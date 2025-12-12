@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-Tests for the features module.
+test_features.py
+~~~~~~~~~~~~~~~~
+Unit tests for the feature engineering module.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import pytest

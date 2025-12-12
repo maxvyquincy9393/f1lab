@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-Tests for the evaluate module.
+test_evaluate.py
+~~~~~~~~~~~~~~~~
+Unit tests for the model evaluation module.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import pytest

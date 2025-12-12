@@ -1,8 +1,13 @@
+# -*- coding: utf-8 -*-
 """
-Tests for the fastf1_loader module.
+test_fastf1_loader.py
+~~~~~~~~~~~~~~~~~~~~~
+Unit tests for the FastF1 loader module.
 
-These tests use mocking to avoid actual API calls.
-Tests are skipped if fastf1 is not installed.
+Uses mocking to avoid actual API calls during testing.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import pytest

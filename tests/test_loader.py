@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-Tests for the loader module.
+test_loader.py
+~~~~~~~~~~~~~~
+Unit tests for the data loader module.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import pytest

@@ -1,5 +1,11 @@
+# -*- coding: utf-8 -*-
 """
-Tests for the model module.
+test_model.py
+~~~~~~~~~~~~~
+Unit tests for the ML model module.
+
+:copyright: (c) 2025 F1 Analytics
+:license: MIT
 """
 
 import pytest
