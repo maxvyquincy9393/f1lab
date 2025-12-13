@@ -1,119 +1,79 @@
-# 🏎️ F1 2025 Analytics Dashboard
+# F1 Analytics Platform
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![FastF1](https://img.shields.io/badge/Data-FastF1-red)](https://github.com/theOehrly/Fast-F1)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A professional-grade analytics platform for the Formula 1 2025 season. This dashboard provides real-time telemetry analysis, race strategy insights, and machine learning-powered predictions.
+Real-time Formula 1 analytics dashboard with telemetry visualization, race strategy analysis, and machine learning predictions for the 2025 season.
 
-![Dashboard Preview](https://via.placeholder.com/800x400.png?text=Dashboard+Preview) *<!-- Replace with actual screenshot -->*
+## Features
 
-## ✨ Key Features
+- **Season Overview** — Driver and constructor standings with trend analysis
+- **Race Analysis** — Telemetry comparison, pit strategy, and position tracking
+- **Qualifying Insights** — Sector dominance and lap time evolution
+- **ML Predictions** — Race outcome forecasting using gradient boosting
+- **Live Timing** — Real-time session monitoring (when available)
 
-*   **📊 Season Overview**: Comprehensive standings for Drivers and Constructors with trend analysis.
-*   **🏎️ Race Center**: Deep dive into every Grand Prix weekend:
-    *   **Telemetry Comparison**: Head-to-head speed, throttle, and brake trace analysis.
-    *   **3D Track Map**: Interactive visualization of speed profiles across the circuit.
-    *   **Strategy Analysis**: Pit stop windows, tyre degradation, and stint comparison.
-*   **⏱️ Qualifying Deep Dive**: Sector dominance maps and lap time evolution tracking.
-*   **🧠 AI Predictions**: Race outcome predictions using Random Forest Regression models.
-*   **🥊 Teammate Battles**: Statistical head-to-head comparison of teammates.
-*   **🔴 Live Timing**: Real-time session monitoring (during active sessions).
+## Tech Stack
 
-## 🛠️ Tech Stack
+| Component | Technology |
+|-----------|------------|
+| Runtime | Python 3.10+ |
+| Frontend | Streamlit, Plotly Dash |
+| Data | Pandas, NumPy, FastF1 |
+| Visualization | Plotly, Matplotlib |
+| ML | Scikit-learn (Gradient Boosting) |
 
-*   **Core**: Python 3.10+
-*   **Frontend**: Streamlit
-*   **Data Processing**: Pandas, NumPy
-*   **Visualization**: Plotly (Interactive), Matplotlib (Static)
-*   **Data Source**: FastF1 API (Official F1 Timing Data), Ergast API (via FastF1)
-*   **Machine Learning**: Scikit-Learn (Random Forest)
+## Quick Start
 
-## 🚀 Installation & Setup
+```bash
+# Clone and setup
+git clone https://github.com/your-username/f1-analytics.git
+cd f1-analytics
+python -m venv .venv && .venv\Scripts\activate  # Windows
+pip install -r requirements.txt
 
-### Prerequisites
-*   Python 3.9 or higher
-*   Git
+# Run
+streamlit run src/app.py
+```
 
-### Quick Start
+### Docker
 
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/maxvyquincy9393/hub.git
-    cd hub
-    ```
+```bash
+docker build -t f1-analytics .
+docker run -p 8501:8501 f1-analytics
+```
 
-2.  **Create a Virtual Environment (Recommended)**
-    ```bash
-    # Windows
-    python -m venv .venv
-    .venv\Scripts\activate
-
-    # Mac/Linux
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
-
-3.  **Install Dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Run the Application**
-    ```bash
-    streamlit run src/app.py
-    ```
-
-### 🐳 Docker Deployment (Alternative)
-
-1.  **Build the Docker image**
-    ```bash
-    docker build -t f1-analytics .
-    ```
-
-2.  **Run the container**
-    ```bash
-    docker run -p 8501:8501 f1-analytics
-    ```
-
-3.  **Access the application**
-    Open your browser and navigate to `http://localhost:8501`
-
-## 📂 Project Structure
+## Project Structure
 
 ```
-f1-analytics/
-├── data/                  # Raw CSV data storage
-├── models/                # Trained ML models (.pkl)
-├── notebooks/             # Jupyter notebooks for experimentation
-│   ├── 01_Data_Exploration.ipynb
-│   ├── 02_Qualifying_Analysis.ipynb
-│   ├── ...
-├── src/                   # Source code
-│   ├── app.py             # Main application entry point
-│   ├── analysis.py        # Statistical analysis modules
+├── src/                   # Application source code
+│   ├── app.py             # Streamlit entry point
+│   ├── dash_app.py        # Dash alternative frontend
+│   ├── analysis.py        # Statistical computations
 │   ├── config.py          # Configuration constants
-│   ├── loader.py          # Data loading utilities
-│   ├── fastf1_extended.py # Advanced FastF1 wrappers
-│   └── ...
-├── tests/                 # Unit tests
-└── README.md              # Project documentation
+│   ├── fastf1_*.py        # Telemetry data modules
+│   └── *_viz.py           # Visualization components
+├── data/                  # Season datasets (CSV)
+├── models/                # Trained model artifacts
+├── notebooks/             # Analysis notebooks
+└── tests/                 # Test suite
 ```
 
-## 🤝 Contributing
+## Development
 
-Contributions are welcome! Please check out the `CONTRIBUTING.md` file for guidelines on how to proceed.
+```bash
+# Run tests
+pytest tests/ -v
 
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+# Code formatting
+black src/ tests/
+isort src/ tests/
+```
 
-## 📄 License
+## License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+MIT License. See [LICENSE](LICENSE) for details.
 
----
-*Note: This project is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.*
+F1, Formula 1, and related marks are trademarks of Formula One Licensing B.V.

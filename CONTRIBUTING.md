@@ -1,54 +1,43 @@
-# Contributing to F1 Visualization
+# Contributing
 
-Thank you for your interest in contributing to this project!
+Thank you for considering contributing to this project.
 
-## How to Contribute
+## Development Setup
 
-### 1. Fork the Repository
 ```bash
-git clone https://github.com/maxvyquincy9393/hub.git
-cd "f1 visualization"
-```
-
-### 2. Set Up Development Environment
-```bash
+git clone https://github.com/your-username/f1-analytics.git
+cd f1-analytics
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
-### 3. Create a Branch
-```bash
-git checkout -b feature/your-feature-name
-```
+## Workflow
 
-### 4. Make Your Changes
-- Follow PEP 8 style guidelines
-- Add docstrings to all functions
-- Update tests if necessary
+1. Create a feature branch from `main`
+2. Make changes following PEP 8 guidelines
+3. Add or update tests as needed
+4. Run the test suite: `pytest tests/ -v`
+5. Format code: `black src/ tests/ && isort src/ tests/`
+6. Submit a pull request
 
-### 5. Run Tests
-```bash
-pytest tests/
-```
+## Commit Messages
 
-### 6. Commit Your Changes
-```bash
-git add .
-git commit -m "feat: add your feature description"
-```
+Use [Conventional Commits](https://www.conventionalcommits.org/):
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
-- `feat:` new feature
-- `fix:` bug fix
-- `docs:` documentation changes
-- `test:` adding tests
-- `refactor:` code refactoring
+- `feat:` — New feature
+- `fix:` — Bug fix
+- `docs:` — Documentation only
+- `test:` — Test additions/changes
+- `refactor:` — Code restructuring
 
-### 7. Push and Create Pull Request
-```bash
-git push origin feature/your-feature-name
-```
+## Code Style
+
+- Follow PEP 8
+- Use type hints for function signatures
+- Add docstrings for public functions
+- Keep functions focused and under 50 lines when practical
 
 ## Code Style
 
