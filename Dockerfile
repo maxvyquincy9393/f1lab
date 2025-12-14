@@ -1,5 +1,5 @@
-# F1 Analytics Dashboard - Docker Image
-# Multi-stage build for production deployment
+# Multi-stage build for F1 Analytics
+# Optimized for production deployment
 
 FROM python:3.11-slim as builder
 

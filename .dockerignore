@@ -1,5 +1,4 @@
-# F1 Analytics Dashboard - Docker Ignore
-# Files and directories to exclude from Docker build context
+# Exclude from Docker build context
 
 # Python
 __pycache__/

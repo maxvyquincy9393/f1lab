@@ -1,30 +1,22 @@
 [theme]
-base="dark"
-primaryColor="#E10600"
-backgroundColor="#0E1117"
-secondaryBackgroundColor="#1a1a2e"
-textColor="#FFFFFF"
-font="sans serif"
+base = "dark"
+primaryColor = "#E10600"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1a1a2e"
+textColor = "#FFFFFF"
+font = "sans serif"
 
 [client]
-# Hide "Made with Streamlit" footer
 toolbarMode = "minimal"
 showErrorDetails = false
 
 [browser]
-# Hide the Fork, GitHub, and settings menu from the app
 gatherUsageStats = false
 
-[ui]
-# Hide top bar completely
-hideTopBar = true
-hideSidebarNav = true
-
 [server]
-# Set the port that your Streamlit app should run on.
 port = 8501
-maxUploadSize = 200 # MB
-maxMessageSize = 200 # MB
+maxUploadSize = 200
+maxMessageSize = 200
 headless = true
 enableCORS = false
 enableXsrfProtection = true
