@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 maxvy
+Copyright (c) 2025 F1 Analytics
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,7 @@ SOFTWARE.
 
 ---
 
-Note: F1, Formula 1, and related trademarks are property of Formula One World 
-Championship Limited. This project is for educational purposes only.
+F1, Formula 1, and related trademarks are property of Formula One Licensing B.V.
+This project is for educational purposes only.
 
-Data sourced from FastF1 library (https://github.com/theOehrly/Fast-F1) which 
-provides access to official F1 timing data.
+Data sourced from FastF1 (https://github.com/theOehrly/Fast-F1).

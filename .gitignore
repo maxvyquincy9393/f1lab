@@ -1,14 +1,20 @@
-# F1 Analytics Dashboard - Git Ignore
-# =====================================
+# =============================================================================
+# Git Ignore Configuration
+# Project: F1 Analytics Platform
+# =============================================================================
 
-# 1. Python & Runtime
+# -----------------------------------------------------------------------------
+# Python Runtime
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 build/
+develop-eggs/
 dist/
+downloads/
 eggs/
 .eggs/
 lib/
@@ -17,68 +23,124 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
-.cursorrules
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
 
-# 2. Virtual Environment
+# -----------------------------------------------------------------------------
+# Virtual Environments
+# -----------------------------------------------------------------------------
 .venv/
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# -----------------------------------------------------------------------------
+# Environment Variables
+# -----------------------------------------------------------------------------
 .env
 .env.local
+.env.*.local
+*.env
 
-# 3. Streamlit
-.streamlit/secrets.toml
-.streamlit/credentials.toml
-
-# 3. Data & Cache (IMPORTANT)
-# Ignore FastF1 cache to save space
+# -----------------------------------------------------------------------------
+# Data & Cache
+# -----------------------------------------------------------------------------
 f1_cache/
 cache/
-# Ignore raw CSVs if they are large or can be re-downloaded
-# data/*.csv
-# !data/.gitkeep
+*.ff1pkl
+*.pkl.gz
 
-# 4. Models (Optional - Keep if small, ignore if large)
+# -----------------------------------------------------------------------------
+# Trained Models (regenerate via training pipeline)
+# -----------------------------------------------------------------------------
 models/*.pkl
 models/*.joblib
+models/*.h5
+models/*.pt
 !models/.gitkeep
 
-# 5. Logs
-logs/*.log
-logs/*.txt
-!logs/.gitkeep
+# -----------------------------------------------------------------------------
+# Logs
+# -----------------------------------------------------------------------------
+logs/
+*.log
+log.txt
 
-# 6. Jupyter Notebooks
+# -----------------------------------------------------------------------------
+# Jupyter Notebooks
+# -----------------------------------------------------------------------------
 .ipynb_checkpoints/
 */.ipynb_checkpoints/
+*.ipynb_checkpoints
 
-# 7. Testing & Coverage
+# -----------------------------------------------------------------------------
+# Testing & Coverage
+# -----------------------------------------------------------------------------
 .coverage
-.pytest_cache/
-htmlcov/
-*.cover
+.coverage.*
 htmlcov/
 .tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+nosetests.xml
+test-results/
+pytestdebug.log
 
-# 7. IDE & OS Settings
+# -----------------------------------------------------------------------------
+# IDE & Editors
+# -----------------------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.pydevproject
+.spyderproject
+.spyproject
+.ropeproject
+
+# -----------------------------------------------------------------------------
+# OS Generated
+# -----------------------------------------------------------------------------
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# 8. Logs
-logs/
-*.log
-
-# 9. Streamlit & Deployment
-.streamlit/secrets.toml
+# -----------------------------------------------------------------------------
+# Deployment & Build
+# -----------------------------------------------------------------------------
 .vercel/
+.netlify/
 *.tmp
+.streamlit/secrets.toml
+
+# -----------------------------------------------------------------------------
+# Misc
+# -----------------------------------------------------------------------------
+*.bak
+*.orig
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
