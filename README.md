@@ -5,75 +5,45 @@
 [![FastF1](https://img.shields.io/badge/Data-FastF1-red)](https://github.com/theOehrly/Fast-F1)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Real-time Formula 1 analytics dashboard with telemetry visualization, race strategy analysis, and machine learning predictions for the 2025 season.
+Real-time Formula 1 analytics dashboard for the 2025 season.
 
-## Features
-
-- **Season Overview** — Driver and constructor standings with trend analysis
-- **Race Analysis** — Telemetry comparison, pit strategy, and position tracking
-- **Qualifying Insights** — Sector dominance and lap time evolution
-- **ML Predictions** — Race outcome forecasting using gradient boosting
-- **Live Timing** — Real-time session monitoring (when available)
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Runtime | Python 3.10+ |
-| Frontend | Streamlit, Plotly Dash |
-| Data | Pandas, NumPy, FastF1 |
-| Visualization | Plotly, Matplotlib |
-| ML | Scikit-learn (Gradient Boosting) |
+![F1 Dashboard](docs/dashboard_home.png)
 
 ## Quick Start
 
 ```bash
-# Clone and setup
 git clone https://github.com/your-username/f1-analytics.git
 cd f1-analytics
-python -m venv .venv && .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
-
-# Run
-streamlit run src/app.py
+streamlit run f1.py
 ```
 
-### Docker
+## Features
 
-```bash
-docker build -t f1-analytics .
-docker run -p 8501:8501 f1-analytics
+- Season Overview & Standings
+- Driver & Team Profiles
+- Race Analysis & Telemetry
+- Race Replay (Desktop + Web)
+- ML Predictions
+- Live Timing
+
+## Structure
+
 ```
-
-## Project Structure
-
-```
-├── src/                   # Application source code
-│   ├── app.py             # Streamlit entry point
-│   ├── dash_app.py        # Dash alternative frontend
-│   ├── analysis.py        # Statistical computations
-│   ├── config.py          # Configuration constants
-│   ├── fastf1_*.py        # Telemetry data modules
-│   └── *_viz.py           # Visualization components
-├── data/                  # Season datasets (CSV)
-├── models/                # Trained model artifacts
-├── notebooks/             # Analysis notebooks
-└── tests/                 # Test suite
-```
-
-## Development
-
-```bash
-# Run tests
-pytest tests/ -v
-
-# Code formatting
-black src/ tests/
-isort src/ tests/
+f1-analytics/
+├── f1.py                 # Main app (streamlit run f1.py)
+├── config.py             # Constants & settings
+├── analysis.py           # Stats calculations
+├── loader.py             # CSV data loading
+├── model.py              # ML predictions
+├── fastf1_extended.py    # Telemetry data
+├── advanced_viz.py       # Visualizations
+├── race_replay_*.py      # Replay system
+├── data/                 # CSV datasets
+├── notebooks/            # Analysis notebooks
+└── tests/                # Test suite
 ```
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
-F1, Formula 1, and related marks are trademarks of Formula One Licensing B.V.
+MIT
