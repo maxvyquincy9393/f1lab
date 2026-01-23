@@ -18,45 +18,45 @@
 
 ---
 
-## ✨ Features
+##  Features
 
-### 📊 Season Analytics
+###  Season Analytics
 - **Championship Standings** — Live driver and constructor leaderboards
 - **Points Progression** — Visual race-by-race championship evolution
 - **Driver Profiles** — Career stats, biography, social links
 - **Team Analysis** — Constructor performance comparisons
 
-### 🏎️ Race Center
+###  Race Center
 - **Race Analysis** — Lap times, position changes, gap analysis
 - **Pit Strategy** — Stop timings, undercuts, tyre strategy visualization
 - **Qualifying** — Sector times, lap evolution, session comparisons
 - **Official Plots** — FIA-style race summary charts
 
-### 📡 Telemetry
+###  Telemetry
 - **Speed Traces** — Throttle, brake, gear data from FastF1
 - **Driver Comparison** — Side-by-side telemetry overlays
 - **Track Visualization** — Circuit maps with corner annotations
 - **Tyre Degradation** — Compound performance over stints
 
-### 🎬 Race Replay
+###  Race Replay
 - **Animated Visualization** — Watch races unfold on track
 - **Desktop Player** — Smooth 60fps Arcade-based replay
 - **Live Leaderboard** — Real-time position updates
 - **Driver Selection** — Click to focus on any driver
 
-### 🤖 Predictions
+###  Predictions
 - **Race Forecasting** — ML-based finishing position predictions
 - **Strategy Simulation** — What-if scenario analysis
 - **Model Evaluation** — Accuracy metrics and validation
 
-### ⏱️ Live Timing
+###  Live Timing
 - **Session Monitor** — Real-time practice, quali, race data
 - **Lap Updates** — Live sector and lap times
 - **Track Status** — Flags, safety car, red flag alerts
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ```bash
 # Clone
@@ -74,7 +74,7 @@ Open **http://localhost:8501** in your browser.
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 f1lab/
@@ -112,7 +112,7 @@ f1lab/
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Category | Technologies |
 |----------|-------------|
@@ -136,7 +136,7 @@ This project uses [FastF1](https://github.com/theOehrly/Fast-F1), an unofficial 
 
 ---
 
-## 🧪 Testing
+##  Testing
 
 ```bash
 pytest tests/ -v
@@ -144,7 +144,7 @@ pytest tests/ -v
 
 ---
 
-## 🐳 Docker
+##  Docker
 
 ```bash
 docker build -t f1lab .
@@ -153,13 +153,13 @@ docker run -p 8501:8501 f1lab
 
 ---
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - [FastF1](https://github.com/theOehrly/Fast-F1) for the amazing F1 data API
 - [Streamlit](https://streamlit.io/) for the web framework
